@@ -5,439 +5,366 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Item Admin</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<style>
-  :root {
-    --bg: #0a0a0d;
-    --bg-2: #111114;
-    --panel: #171418;
-    --panel-2: #211c22;
-    --panel-3: #0e0c10;
-    --text: #ddd6c8;
-    --muted: #9b9182;
-    --line: #3b3127;
-    --accent: #9f7a44;
-    --danger: #b14a3b;
-    --ok: #6f9a58;
-    --warn: #c8a35a;
+  <style>
+    :root {
+      --bg: #0a0a0d;
+      --bg-2: #111114;
+      --panel: #171418;
+      --panel-2: #211c22;
+      --panel-3: #0e0c10;
+      --text: #ddd6c8;
+      --muted: #9b9182;
+      --line: #3b3127;
+      --accent: #9f7a44;
+      --danger: #b14a3b;
+      --ok: #6f9a58;
+      --warn: #c8a35a;
 
-    --rarity-normal: #d5d0c7;
-    --rarity-magic: #6da9ff;
-    --rarity-rare: #e7d27a;
-    --rarity-legendary: #ff9d3a;
-    --rarity-set: #6bc26b;
+      --rarity-normal: #d5d0c7;
+      --rarity-magic: #6da9ff;
+      --rarity-rare: #e7d27a;
+      --rarity-legendary: #ff9d3a;
+      --rarity-set: #6bc26b;
 
-    --tooltip-bg-top: rgba(22, 17, 12, 0.97);
-    --tooltip-bg-bottom: rgba(8, 6, 4, 0.98);
-    --tooltip-border: #7b5a2d;
-    --tooltip-inner: #2d2215;
-    --tooltip-power: #ff9d3a;
-    --tooltip-header: #c7b79b;
-    --tooltip-footer: #968b7d;
-  }
+      --tooltip-bg-top: rgba(22, 17, 12, 0.97);
+      --tooltip-bg-bottom: rgba(8, 6, 4, 0.98);
+      --tooltip-border: #7b5a2d;
+      --tooltip-power: #ff9d3a;
+      --tooltip-header: #c7b79b;
+      --tooltip-footer: #968b7d;
+    }
 
-  * {
-    box-sizing: border-box;
-  }
+    * { box-sizing: border-box; }
 
-  body {
-    margin: 0;
-    font-family: Arial, Helvetica, sans-serif;
-    background:
-      radial-gradient(circle at top, rgba(70,40,15,0.18), transparent 35%),
-      linear-gradient(180deg, #09090b 0%, #0d0b0e 40%, #0a090b 100%);
-    color: var(--text);
-  }
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background:
+        radial-gradient(circle at top, rgba(70,40,15,0.18), transparent 35%),
+        linear-gradient(180deg, #09090b 0%, #0d0b0e 40%, #0a090b 100%);
+      color: var(--text);
+    }
 
-  .wrap {
-    max-width: 1700px;
-    margin: 0 auto;
-    padding: 20px;
-  }
+    .wrap {
+      max-width: 1800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
 
-  .card {
-    background: linear-gradient(180deg, rgba(27,22,18,0.96), rgba(17,13,11,0.98));
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    padding: 16px;
-    margin-bottom: 16px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.32);
-  }
+    .card {
+      background: linear-gradient(180deg, rgba(27,22,18,0.96), rgba(17,13,11,0.98));
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.32);
+    }
 
-  h1, h2, h3 {
-    margin-top: 0;
-    color: #e8dcc7;
-  }
+    h1, h2, h3, h4 {
+      margin-top: 0;
+      color: #e8dcc7;
+    }
 
-  .muted {
-    color: var(--muted);
-    font-size: 14px;
-  }
+    .muted { color: var(--muted); font-size: 14px; }
+    .hidden { display: none !important; }
 
-  .hidden {
-    display: none !important;
-  }
+    .row {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 12px;
+      margin-bottom: 12px;
+    }
 
-  .row {
-    display: grid;
-    grid-template-columns: repeat(12, 1fr);
-    gap: 12px;
-    margin-bottom: 12px;
-  }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
 
-  .field {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
+    .col-12 { grid-column: span 12; }
+    .col-9  { grid-column: span 9; }
+    .col-8  { grid-column: span 8; }
+    .col-6  { grid-column: span 6; }
+    .col-4  { grid-column: span 4; }
+    .col-3  { grid-column: span 3; }
+    .col-2  { grid-column: span 2; }
 
-  .col-12 { grid-column: span 12; }
-  .col-9  { grid-column: span 9; }
-  .col-8  { grid-column: span 8; }
-  .col-6  { grid-column: span 6; }
-  .col-4  { grid-column: span 4; }
-  .col-3  { grid-column: span 3; }
-  .col-2  { grid-column: span 2; }
-  .col-1  { grid-column: span 1; }
+    label {
+      font-size: 13px;
+      color: #b6ab9a;
+    }
 
-  label {
-    font-size: 13px;
-    color: #b6ab9a;
-  }
+    input, select, textarea, button {
+      font: inherit;
+    }
 
-  input, select, textarea, button {
-    font: inherit;
-  }
+    input, select, textarea {
+      width: 100%;
+      padding: 10px 12px;
+      background: linear-gradient(180deg, #201b20, #181419);
+      color: var(--text);
+      border: 1px solid #4a3b2c;
+      border-radius: 8px;
+    }
 
-  input, select, textarea {
-    width: 100%;
-    padding: 10px 12px;
-    background: linear-gradient(180deg, #201b20, #181419);
-    color: var(--text);
-    border: 1px solid #4a3b2c;
-    border-radius: 8px;
-  }
+    textarea {
+      min-height: 90px;
+      resize: vertical;
+    }
 
-  textarea {
-    min-height: 90px;
-    resize: vertical;
-  }
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: #a87b3d;
+      box-shadow: 0 0 0 1px rgba(168,123,61,0.35);
+    }
 
-  input:focus, select:focus, textarea:focus {
-    outline: none;
-    border-color: #a87b3d;
-    box-shadow: 0 0 0 1px rgba(168,123,61,0.35);
-  }
+    button {
+      padding: 10px 14px;
+      border: 1px solid #5b452f;
+      border-radius: 8px;
+      background: linear-gradient(180deg, #33271d, #241c16);
+      color: #eadcc3;
+      cursor: pointer;
+    }
 
-  button {
-    padding: 10px 14px;
-    border: 1px solid #5b452f;
-    border-radius: 8px;
-    background: linear-gradient(180deg, #33271d, #241c16);
-    color: #eadcc3;
-    cursor: pointer;
-  }
+    button:hover {
+      border-color: #b1844c;
+      background: linear-gradient(180deg, #3e2f22, #2a2119);
+    }
 
-  button:hover {
-    border-color: #b1844c;
-    background: linear-gradient(180deg, #3e2f22, #2a2119);
-  }
+    .btn-primary {
+      background: linear-gradient(180deg, #7d5a2f, #593f23);
+      border-color: #b1844c;
+    }
 
-  .btn-primary {
-    background: linear-gradient(180deg, #7d5a2f, #593f23);
-    border-color: #b1844c;
-  }
+    .btn-danger {
+      background: linear-gradient(180deg, #7a2e26, #551f1a);
+      border-color: #a34a3d;
+    }
 
-  .btn-danger {
-    background: linear-gradient(180deg, #7a2e26, #551f1a);
-    border-color: #a34a3d;
-  }
+    .btn-secondary {
+      background: linear-gradient(180deg, #332922, #241d19);
+    }
 
-  .btn-secondary {
-    background: linear-gradient(180deg, #332922, #241d19);
-  }
+    .btn-small {
+      padding: 6px 10px;
+      font-size: 13px;
+    }
 
-  .btn-small {
-    padding: 6px 10px;
-    font-size: 13px;
-  }
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
 
-  .toolbar {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-    align-items: center;
-  }
+    .tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
 
-  .tabs {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-bottom: 16px;
-  }
+    .tab-btn.active {
+      border-color: #d2a55f;
+      background: linear-gradient(180deg, #6e4f2a, #4c371f);
+      color: #fff1d5;
+    }
 
-  .tab-btn.active {
-    border-color: #d2a55f;
-    background: linear-gradient(180deg, #6e4f2a, #4c371f);
-    color: #fff1d5;
-  }
+    .status {
+      padding: 10px 12px;
+      border-radius: 8px;
+      margin-bottom: 14px;
+      font-size: 14px;
+      border: 1px solid var(--line);
+      white-space: pre-wrap;
+    }
 
-  .status {
-    padding: 10px 12px;
-    border-radius: 8px;
-    margin-bottom: 14px;
-    font-size: 14px;
-    border: 1px solid var(--line);
-    white-space: pre-wrap;
-  }
+    .status.info { background: rgba(44,32,22,0.9); }
+    .status.ok { background: rgba(29,52,25,0.9); border-color: #557c44; }
+    .status.error { background: rgba(65,26,24,0.95); border-color: #8b4037; }
 
-  .status.info { background: rgba(44,32,22,0.9); }
-  .status.ok { background: rgba(29,52,25,0.9); border-color: #557c44; }
-  .status.error { background: rgba(65,26,24,0.95); border-color: #8b4037; }
-
-  .section-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-top: 18px;
-    margin-bottom: 10px;
-    gap: 12px;
-    flex-wrap: wrap;
-  }
-
-  .repeater-list {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .repeater-item {
-    border: 1px solid #43352a;
-    background: linear-gradient(180deg, #171318, #100d11);
-    border-radius: 10px;
-    padding: 12px;
-  }
-
-  .sub-block {
-    border: 1px dashed #5a4635;
-    background: linear-gradient(180deg, #17151a, #100f13);
-    border-radius: 10px;
-    padding: 12px;
-    margin-top: 10px;
-  }
-
-  .item-list {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 12px;
-  }
-
-  .item-card {
-    border: 1px solid #4a3a2e;
-    border-radius: 10px;
-    background: linear-gradient(180deg, #171318, #0e0c10);
-    padding: 12px;
-    cursor: pointer;
-  }
-
-  .item-card:hover {
-    border-color: #b1844c;
-  }
-
-  .item-title {
-    font-weight: bold;
-    margin-bottom: 6px;
-  }
-
-  .pill {
-    display: inline-block;
-    font-size: 12px;
-    padding: 4px 8px;
-    border-radius: 999px;
-    border: 1px solid #51402e;
-    background: #1a1512;
-    color: #c3b59f;
-    margin-right: 6px;
-    margin-bottom: 6px;
-  }
-
-  .inline {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    align-items: center;
-  }
-
-  .split {
-    display: grid;
-    grid-template-columns: 420px 1fr;
-    gap: 16px;
-  }
-
-  .sticky {
-    position: sticky;
-    top: 16px;
-    align-self: start;
-  }
-
-  .small-note {
-    font-size: 12px;
-    color: var(--muted);
-  }
-
-  .form-preview-layout {
-    display: grid;
-    grid-template-columns: minmax(820px, 1fr) 430px;
-    gap: 16px;
-    align-items: start;
-  }
-
-  .preview-sticky {
-    position: sticky;
-    top: 16px;
-    align-self: start;
-  }
-
-  /* Diablo Tooltip */
-  .tooltip-preview-shell {
-    position: relative;
-    background:
-      linear-gradient(180deg, var(--tooltip-bg-top) 0%, var(--tooltip-bg-bottom) 100%);
-    border: 1px solid var(--tooltip-border);
-    border-radius: 6px;
-    min-height: 340px;
-    padding: 16px 18px;
-    box-shadow:
-      0 0 0 1px rgba(255, 180, 90, 0.10) inset,
-      0 16px 40px rgba(0,0,0,0.55);
-    overflow: hidden;
-  }
-
-  .tooltip-preview-shell::before {
-    content: "";
-    position: absolute;
-    inset: 6px;
-    border: 1px solid rgba(180, 130, 60, 0.18);
-    pointer-events: none;
-    border-radius: 4px;
-  }
-
-  .tooltip-preview-shell::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background:
-      radial-gradient(circle at top, rgba(255,180,90,0.05), transparent 25%),
-      radial-gradient(circle at bottom, rgba(255,180,90,0.03), transparent 20%);
-    pointer-events: none;
-  }
-
-  .tooltip-preview-title {
-    font-size: 28px;
-    font-weight: bold;
-    margin-bottom: 6px;
-    line-height: 1.12;
-    text-shadow: 0 0 8px rgba(0,0,0,0.35);
-  }
-
-  .rarity-normal { color: var(--rarity-normal); }
-  .rarity-magic { color: var(--rarity-magic); }
-  .rarity-rare { color: var(--rarity-rare); }
-  .rarity-legendary { color: var(--rarity-legendary); }
-  .rarity-set { color: var(--rarity-set); }
-
-  .tooltip-line {
-    margin: 2px 0;
-    line-height: 1.38;
-    white-space: pre-wrap;
-    word-break: break-word;
-    color: #d8d0c2;
-  }
-
-  .tooltip-section-label {
-    margin-top: 12px;
-    margin-bottom: 4px;
-    color: var(--tooltip-header);
-    font-weight: bold;
-    font-size: 13px;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-  }
-
-  .tooltip-power {
-    color: var(--tooltip-power);
-  }
-
-  .tooltip-footer {
-    color: var(--tooltip-footer);
-  }
-
-  .tooltip-divider {
-    border-top: 1px solid rgba(165, 123, 55, 0.32);
-    margin: 10px 0;
-  }
-
-  .preview-meta {
-    margin-top: 12px;
-    padding-top: 10px;
-    border-top: 1px solid rgba(165, 123, 55, 0.25);
-    color: #8b8172;
-    font-size: 12px;
-  }
-
-  .preview-hint {
-    color: #a79c8a;
-    font-size: 13px;
-    line-height: 1.4;
-  }
-
-  .preview-debug-box {
-    margin-top: 12px;
-    padding: 10px;
-    border: 1px solid rgba(165,123,55,0.2);
-    background: rgba(0,0,0,0.18);
-    border-radius: 6px;
-  }
-
-  .preview-debug-box strong {
-    color: #d7c19b;
-  }
-
-  @media (max-width: 1400px) {
-    .form-preview-layout {
-      grid-template-columns: 1fr;
+    .editor-layout {
+      display: grid;
+      grid-template-columns: minmax(980px, 1fr) 420px;
+      gap: 16px;
+      align-items: start;
     }
 
     .preview-sticky {
-      position: static;
+      position: sticky;
+      top: 16px;
+      align-self: start;
     }
-  }
 
-  @media (max-width: 1100px) {
+    .tooltip-preview-shell {
+      position: relative;
+      background: linear-gradient(180deg, var(--tooltip-bg-top) 0%, var(--tooltip-bg-bottom) 100%);
+      border: 1px solid var(--tooltip-border);
+      border-radius: 6px;
+      min-height: 340px;
+      padding: 16px 18px;
+      box-shadow: 0 0 0 1px rgba(255,180,90,0.10) inset, 0 16px 40px rgba(0,0,0,0.55);
+      overflow: hidden;
+    }
+
+    .tooltip-preview-shell::before {
+      content: "";
+      position: absolute;
+      inset: 6px;
+      border: 1px solid rgba(180,130,60,0.18);
+      pointer-events: none;
+      border-radius: 4px;
+    }
+
+    .tooltip-preview-title {
+      font-size: 28px;
+      font-weight: bold;
+      margin-bottom: 6px;
+      line-height: 1.12;
+      text-shadow: 0 0 8px rgba(0,0,0,0.35);
+    }
+
+    .rarity-normal { color: var(--rarity-normal); }
+    .rarity-magic { color: var(--rarity-magic); }
+    .rarity-rare { color: var(--rarity-rare); }
+    .rarity-legendary { color: var(--rarity-legendary); }
+
+    .tooltip-line {
+      margin: 2px 0;
+      line-height: 1.38;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: #d8d0c2;
+    }
+
+    .tooltip-section-label {
+      margin-top: 12px;
+      margin-bottom: 4px;
+      color: var(--tooltip-header);
+      font-weight: bold;
+      font-size: 13px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .tooltip-power { color: var(--tooltip-power); }
+    .tooltip-footer { color: var(--tooltip-footer); }
+
+    .tooltip-divider {
+      border-top: 1px solid rgba(165,123,55,0.32);
+      margin: 10px 0;
+    }
+
+    .preview-meta {
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(165,123,55,0.25);
+      color: #8b8172;
+      font-size: 12px;
+    }
+
+    .preview-hint {
+      color: #a79c8a;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 18px;
+      margin-bottom: 10px;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .module-box {
+      border: 1px solid #43352a;
+      background: linear-gradient(180deg, #171318, #100d11);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+
+    .module-mini {
+      border: 1px dashed #5a4635;
+      background: linear-gradient(180deg, #17151a, #100f13);
+      border-radius: 10px;
+      padding: 12px;
+      margin-top: 10px;
+    }
+
+    .item-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 12px;
+    }
+
+    .item-card {
+      border: 1px solid #4a3a2e;
+      border-radius: 10px;
+      background: linear-gradient(180deg, #171318, #0e0c10);
+      padding: 12px;
+      cursor: pointer;
+    }
+
+    .item-card:hover { border-color: #b1844c; }
+
+    .item-title {
+      font-weight: bold;
+      margin-bottom: 6px;
+    }
+
+    .pill {
+      display: inline-block;
+      font-size: 12px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid #51402e;
+      background: #1a1512;
+      color: #c3b59f;
+      margin-right: 6px;
+      margin-bottom: 6px;
+    }
+
     .split {
-      grid-template-columns: 1fr;
+      display: grid;
+      grid-template-columns: 420px 1fr;
+      gap: 16px;
     }
 
     .sticky {
-      position: static;
+      position: sticky;
+      top: 16px;
+      align-self: start;
     }
-  }
 
-  @media (max-width: 800px) {
-    .col-9, .col-8, .col-6, .col-4, .col-3, .col-2, .col-1 {
-      grid-column: span 12;
+    .small-note {
+      font-size: 12px;
+      color: var(--muted);
     }
-  }
-</style>
+
+    @media (max-width: 1400px) {
+      .editor-layout { grid-template-columns: 1fr; }
+      .preview-sticky { position: static; }
+    }
+
+    @media (max-width: 1100px) {
+      .split { grid-template-columns: 1fr; }
+      .sticky { position: static; }
+    }
+
+    @media (max-width: 800px) {
+      .col-9, .col-8, .col-6, .col-4, .col-3, .col-2 { grid-column: span 12; }
+    }
+  </style>
 </head>
-    <script>
-      console.log("index.html fertig geladen");
-    </script>
 <body>
   <div class="wrap">
     <h1>Item Admin</h1>
-    <p class="muted">
-      GitHub-Website für Items, Fixed Properties und Choice Groups.
-    </p>
+    <p class="muted">Vereinfachter Editor für Items, Affixe, Macht und Meta-Daten.</p>
 
     <div id="statusBox" class="status info hidden"></div>
 
@@ -474,20 +401,24 @@
       </div>
 
       <div id="tab-create" class="tab-panel">
-        <div class="form-preview-layout">
+        <div class="editor-layout">
           <div class="card">
             <h2>Neues Item anlegen</h2>
-            <p class="muted">
-              `item_code` wird automatisch erstellt. `equip_slot` wird automatisch aus `item_type` gezogen.
-            </p>
 
             <form id="createForm">
               <div class="row">
-                <div class="field col-6">
-                  <label for="create_display_name">Display Name</label>
-                  <input id="create_display_name" type="text" placeholder="z. B. Die Verwehrung" />
+                <div class="field col-3">
+                  <label for="create_item_family">Kategorie</label>
+                  <select id="create_item_family"></select>
                 </div>
-
+                <div class="field col-3">
+                  <label for="create_item_subfamily">Unterkategorie</label>
+                  <select id="create_item_subfamily"></select>
+                </div>
+                <div class="field col-3">
+                  <label for="create_item_type">Genaues Item</label>
+                  <select id="create_item_type"></select>
+                </div>
                 <div class="field col-3">
                   <label for="create_rarity">Rarity</label>
                   <select id="create_rarity">
@@ -499,210 +430,168 @@
                     <option value="unreal">unreal</option>
                   </select>
                 </div>
-
-                <div class="field col-3">
-                  <label for="create_item_type">Item Type</label>
-                  <select id="create_item_type"></select>
-                </div>
               </div>
 
               <div class="row">
-                <div class="field col-3">
-                  <label for="create_item_code_preview">Item Code (auto)</label>
+                <div class="field col-8">
+                  <label for="create_display_name">Anzeigename</label>
+                  <input id="create_display_name" type="text" />
+                </div>
+                <div class="field col-2">
+                  <label for="create_item_code_preview">item_code</label>
                   <input id="create_item_code_preview" type="text" readonly />
                 </div>
-
-                <div class="field col-3">
-                  <label for="create_internal_name">Internal Name</label>
-                  <input id="create_internal_name" type="text" readonly />
-                </div>
-
-                <div class="field col-3">
-                  <label for="create_equip_slot">Equip Slot (auto)</label>
+                <div class="field col-2">
+                  <label for="create_equip_slot">equip_slot</label>
                   <input id="create_equip_slot" type="text" readonly />
                 </div>
+              </div>
 
-                <div class="field col-3">
-                  <label for="create_tooltip_archetype">Tooltip Archetype</label>
-                  <select id="create_tooltip_archetype">
-                    <option value="">auto</option>
-                    <option value="weapon">weapon</option>
-                    <option value="armor">armor</option>
-                    <option value="jewelry">jewelry</option>
-                    <option value="offhand">offhand</option>
-                    <option value="backpack">backpack</option>
-                    <option value="artifact">artifact</option>
-                    <option value="special">special</option>
-                  </select>
+              <div id="createWeaponBlock" class="module-box hidden">
+                <h3>Waffenwerte</h3>
+                <div class="row">
+                  <div class="field col-4">
+                    <label for="create_damage_min">Schaden Min</label>
+                    <input id="create_damage_min" type="number" />
+                  </div>
+                  <div class="field col-4">
+                    <label for="create_damage_max">Schaden Max</label>
+                    <input id="create_damage_max" type="number" />
+                  </div>
+                  <div class="field col-4">
+                    <label for="create_attacks_per_second">Angriffe pro Sekunde</label>
+                    <input id="create_attacks_per_second" type="number" step="0.01" />
+                  </div>
                 </div>
               </div>
 
-              <div class="row">
-                <div class="field col-3">
-                  <label for="create_level_requirement">Item Level / Level Requirement</label>
-                  <input id="create_level_requirement" type="number" value="1" min="1" />
-                </div>
-
-                <div class="field col-3">
-                  <label for="create_binding_mode">Binding Mode</label>
-                  <select id="create_binding_mode">
-                    <option value="tradable">tradable</option>
-                    <option value="account_bound">account_bound</option>
-                    <option value="bind_on_equip">bind_on_equip</option>
-                    <option value="bind_on_pickup">bind_on_pickup</option>
-                  </select>
-                </div>
-
-                <div class="field col-3">
-                  <label for="create_source_type">Source Type</label>
-                  <select id="create_source_type">
-                    <option value="drop">drop</option>
-                    <option value="crafted">crafted</option>
-                    <option value="quest">quest</option>
-                    <option value="vendor">vendor</option>
-                    <option value="event">event</option>
-                  </select>
-                </div>
-
-                <div class="field col-3">
-                  <label for="create_crafted_tier">Crafted Tier</label>
-                  <input id="create_crafted_tier" type="number" min="1" placeholder="leer wenn nicht crafted" />
+              <div id="createArmorBlock" class="module-box hidden">
+                <h3>Rüstungswerte</h3>
+                <div class="row">
+                  <div class="field col-4">
+                    <label for="create_armor_min">Grundrüstung Min</label>
+                    <input id="create_armor_min" type="number" />
+                  </div>
+                  <div class="field col-4">
+                    <label for="create_armor_max">Grundrüstung Max</label>
+                    <input id="create_armor_max" type="number" />
+                  </div>
+                  <div class="field col-4">
+                    <label for="create_block_base">Blockwert Basis</label>
+                    <input id="create_block_base" type="number" step="0.01" />
+                  </div>
                 </div>
               </div>
 
-              <div class="row">
-                <div class="field col-3">
-                  <label for="create_damage_min">Damage Min</label>
-                  <input id="create_damage_min" type="number" placeholder="z. B. 16" />
-                </div>
-
-                <div class="field col-3">
-                  <label for="create_damage_max">Damage Max</label>
-                  <input id="create_damage_max" type="number" placeholder="z. B. 36" />
-                </div>
-
-                <div class="field col-3">
-                  <label for="create_attacks_per_second">APS</label>
-                  <input id="create_attacks_per_second" type="number" step="0.01" placeholder="z. B. 1.40" />
-                </div>
-
-                <div class="field col-3">
-                  <label for="create_armor_base">Armor Base</label>
-                  <input id="create_armor_base" type="number" placeholder="z. B. 89" />
-                </div>
-              </div>
-
-              <div class="row">
-                <div class="field col-3">
-                  <label for="create_block_base">Block Base</label>
-                  <input id="create_block_base" type="number" step="0.01" placeholder="optional" />
-                </div>
-
-                <div class="field col-3">
-                  <label for="create_min_sockets">Min Sockets</label>
-                  <input id="create_min_sockets" type="number" min="0" value="0" />
-                </div>
-
-                <div class="field col-3">
-                  <label for="create_max_sockets">Max Sockets</label>
-                  <input id="create_max_sockets" type="number" min="0" value="0" />
-                </div>
-
-                <div class="field col-3">
-                  <label for="create_rarity_label">Rarity Label</label>
-                  <input id="create_rarity_label" type="text" placeholder="z. B. Legendärer Schild" />
-                </div>
-              </div>
-
-              <div class="row">
-                <div class="field col-3">
-                  <label>
-                    <input id="create_is_unique_equipped" type="checkbox" />
-                    Unique Equipped
-                  </label>
-                </div>
-
-                <div class="field col-3">
-                  <label>
-                    <input id="create_can_have_gems" type="checkbox" />
-                    Can Have Gems
-                  </label>
-                </div>
-
-                <div class="field col-3">
-                  <label>
-                    <input id="create_can_roll_primary_affixes" type="checkbox" checked />
-                    Can Roll Primary Affixes
-                  </label>
-                </div>
-
-                <div class="field col-3">
-                  <label>
-                    <input id="create_can_roll_secondary_affixes" type="checkbox" checked />
-                    Can Roll Secondary Affixes
-                  </label>
-                </div>
-              </div>
-
-              <div class="row">
-                <div class="field col-4">
-                  <label for="create_random_primary_min">Random Primary Min</label>
-                  <input id="create_random_primary_min" type="number" min="0" value="0" />
-                </div>
-                <div class="field col-4">
-                  <label for="create_random_primary_max">Random Primary Max</label>
-                  <input id="create_random_primary_max" type="number" min="0" value="0" />
-                </div>
-                <div class="field col-4">
-                  <label for="create_random_secondary_min">Random Secondary Min</label>
-                  <input id="create_random_secondary_min" type="number" min="0" value="0" />
-                </div>
-              </div>
-
-              <div class="row">
-                <div class="field col-4">
-                  <label for="create_random_secondary_max">Random Secondary Max</label>
-                  <input id="create_random_secondary_max" type="number" min="0" value="0" />
-                </div>
-                <div class="field col-4">
-                  <label for="create_item_set_code">Item Set Code</label>
-                  <input id="create_item_set_code" type="text" placeholder="optional" />
-                </div>
-                <div class="field col-4">
-                  <label for="create_appearance_code">Appearance Code</label>
-                  <input id="create_appearance_code" type="text" placeholder="optional, sonst item_code" />
-                </div>
-              </div>
-
-              <div class="row">
-                <div class="field col-12">
-                  <label for="create_description">Description</label>
-                  <textarea id="create_description" placeholder="z. B. Legendärer Schild"></textarea>
-                </div>
-              </div>
-
-              <div class="row">
-                <div class="field col-12">
-                  <label for="create_flavor_text">Flavor Text</label>
-                  <textarea id="create_flavor_text" placeholder="optional"></textarea>
+              <div class="module-box">
+                <h3>Zufällige Affixe</h3>
+                <div class="row">
+                  <div class="field col-3">
+                    <label for="create_random_primary_min">Random Primary Min</label>
+                    <input id="create_random_primary_min" type="number" min="0" value="0" />
+                  </div>
+                  <div class="field col-3">
+                    <label for="create_random_primary_max">Random Primary Max</label>
+                    <input id="create_random_primary_max" type="number" min="0" value="0" />
+                  </div>
+                  <div class="field col-3">
+                    <label for="create_random_secondary_min">Random Secondary Min</label>
+                    <input id="create_random_secondary_min" type="number" min="0" value="0" />
+                  </div>
+                  <div class="field col-3">
+                    <label for="create_random_secondary_max">Random Secondary Max</label>
+                    <input id="create_random_secondary_max" type="number" min="0" value="0" />
+                  </div>
                 </div>
               </div>
 
               <div class="section-header">
-                <h3>Feste Properties</h3>
-                <button type="button" id="btnAddCreateFixed" class="btn-secondary btn-small">+ Fixed Property</button>
+                <h3>Affix-Module</h3>
+                <button type="button" id="btnAddCreateAffixModule" class="btn-secondary btn-small">+ Affix-Modul</button>
               </div>
-              <div id="createFixedList" class="repeater-list"></div>
+              <div id="createAffixModuleList"></div>
 
-              <div class="section-header">
-                <h3>Choice Groups</h3>
-                <button type="button" id="btnAddCreateChoiceGroup" class="btn-secondary btn-small">+ Choice Group</button>
+              <div class="module-box">
+                <div class="row">
+                  <div class="field col-3">
+                    <label>
+                      <input id="create_has_power" type="checkbox" />
+                      Macht vorhanden
+                    </label>
+                  </div>
+                </div>
+
+                <div id="createPowerBlock" class="hidden">
+                  <div class="row">
+                    <div class="field col-12">
+                      <label for="create_power_description">Macht Beschreibung</label>
+                      <textarea id="create_power_description"></textarea>
+                    </div>
+                  </div>
+                  <div class="row">
+                    <div class="field col-3">
+                      <label for="create_power_value_min">Macht Wert Min</label>
+                      <input id="create_power_value_min" type="number" step="0.01" />
+                    </div>
+                    <div class="field col-3">
+                      <label for="create_power_value_max">Macht Wert Max</label>
+                      <input id="create_power_value_max" type="number" step="0.01" />
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div id="createChoiceGroupList" class="repeater-list"></div>
 
-              <div class="section-header">
-                <div class="small-note">
-                  Leere Felder werden nicht geschrieben.
+              <div class="module-box">
+                <h3>Meta</h3>
+                <div class="row">
+                  <div class="field col-3">
+                    <label>
+                      <input id="create_is_crafted" type="checkbox" />
+                      Herstellbar
+                    </label>
+                  </div>
+                  <div class="field col-3">
+                    <label for="create_crafted_by">Herstellbar bei</label>
+                    <select id="create_crafted_by">
+                      <option value="">-</option>
+                      <option value="blacksmith">Schmied</option>
+                      <option value="jeweler">Juwelier</option>
+                    </select>
+                  </div>
+                  <div class="field col-3">
+                    <label for="create_crafted_tier">Craft Tier</label>
+                    <input id="create_crafted_tier" type="number" min="1" />
+                  </div>
+                  <div class="field col-3">
+                    <label for="create_binding_mode">Binding</label>
+                    <select id="create_binding_mode">
+                      <option value="tradable">tradable</option>
+                      <option value="account_bound">account_bound</option>
+                      <option value="bind_on_equip">bind_on_equip</option>
+                      <option value="bind_on_pickup">bind_on_pickup</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="row">
+                  <div class="field col-3">
+                    <label>
+                      <input id="create_is_unique_equipped" type="checkbox" />
+                      Unique Equipped
+                    </label>
+                  </div>
+                  <div class="field col-3">
+                    <label for="create_level_requirement">Item Level</label>
+                    <input id="create_level_requirement" type="number" min="1" value="1" />
+                  </div>
+                  <div class="field col-3">
+                    <label for="create_rarity_label">Rarity Label</label>
+                    <input id="create_rarity_label" type="text" />
+                  </div>
+                  <div class="field col-3">
+                    <label for="create_appearance_code">Appearance Code</label>
+                    <input id="create_appearance_code" type="text" />
+                  </div>
                 </div>
               </div>
 
@@ -715,11 +604,9 @@
 
           <div class="card preview-sticky">
             <h2>Live-Vorschau</h2>
-            <div id="createPreviewBox" class="tooltip-preview-shell">
+            <div class="tooltip-preview-shell">
               <div id="createPreviewContent">
-                <div class="preview-hint">
-                  Sobald du links Werte einträgst, soll hier das fertige Item-Tooltip erscheinen.
-                </div>
+                <div class="preview-hint">Sobald du links Werte einträgst, erscheint hier die Vorschau.</div>
               </div>
             </div>
           </div>
@@ -729,11 +616,10 @@
       <div id="tab-list" class="tab-panel hidden">
         <div class="card">
           <h2>Items anzeigen</h2>
-
           <div class="row">
             <div class="field col-4">
               <label for="list_search">Suche</label>
-              <input id="list_search" type="text" placeholder="Name, item_code, item_type ..." />
+              <input id="list_search" type="text" />
             </div>
             <div class="field col-3">
               <label for="list_filter_rarity">Rarity</label>
@@ -748,17 +634,16 @@
               </select>
             </div>
             <div class="field col-3">
-              <label for="list_filter_type">Item Type</label>
-              <select id="list_filter_type">
+              <label for="list_filter_item_type">Item Type</label>
+              <select id="list_filter_item_type">
                 <option value="">alle</option>
               </select>
             </div>
             <div class="field col-2">
               <label>&nbsp;</label>
-              <button id="btnReloadList" class="btn-secondary">Neu laden</button>
+              <button id="btnReloadList">Neu laden</button>
             </div>
           </div>
-
           <div id="itemList" class="item-list"></div>
         </div>
       </div>
@@ -769,26 +654,33 @@
             <h2>Items</h2>
             <div class="field">
               <label for="edit_search">Suche</label>
-              <input id="edit_search" type="text" placeholder="Name oder item_code" />
+              <input id="edit_search" type="text" />
             </div>
             <div id="editItemList" class="item-list" style="grid-template-columns:1fr; margin-top:12px;"></div>
           </div>
 
           <div class="card">
-            <div class="form-preview-layout">
+            <div class="editor-layout">
               <div>
                 <h2>Item bearbeiten</h2>
                 <p id="editHint" class="muted">Wähle links ein Item aus.</p>
 
                 <form id="editForm" class="hidden">
-                  <input type="hidden" id="edit_item_id" />
+                  <input id="edit_item_id" type="hidden" />
 
                   <div class="row">
-                    <div class="field col-6">
-                      <label for="edit_display_name">Display Name</label>
-                      <input id="edit_display_name" type="text" />
+                    <div class="field col-3">
+                      <label for="edit_item_family">Kategorie</label>
+                      <select id="edit_item_family"></select>
                     </div>
-
+                    <div class="field col-3">
+                      <label for="edit_item_subfamily">Unterkategorie</label>
+                      <select id="edit_item_subfamily"></select>
+                    </div>
+                    <div class="field col-3">
+                      <label for="edit_item_type">Genaues Item</label>
+                      <select id="edit_item_type"></select>
+                    </div>
                     <div class="field col-3">
                       <label for="edit_rarity">Rarity</label>
                       <select id="edit_rarity">
@@ -800,208 +692,172 @@
                         <option value="unreal">unreal</option>
                       </select>
                     </div>
-
-                    <div class="field col-3">
-                      <label for="edit_item_type">Item Type</label>
-                      <select id="edit_item_type"></select>
-                    </div>
                   </div>
 
                   <div class="row">
-                    <div class="field col-3">
-                      <label for="edit_item_code">Item Code</label>
+                    <div class="field col-8">
+                      <label for="edit_display_name">Anzeigename</label>
+                      <input id="edit_display_name" type="text" />
+                    </div>
+                    <div class="field col-2">
+                      <label for="edit_item_code">item_code</label>
                       <input id="edit_item_code" type="text" />
                     </div>
-
-                    <div class="field col-3">
-                      <label for="edit_internal_name">Internal Name</label>
-                      <input id="edit_internal_name" type="text" />
-                    </div>
-
-                    <div class="field col-3">
-                      <label for="edit_equip_slot">Equip Slot</label>
+                    <div class="field col-2">
+                      <label for="edit_equip_slot">equip_slot</label>
                       <input id="edit_equip_slot" type="text" readonly />
                     </div>
+                  </div>
 
-                    <div class="field col-3">
-                      <label for="edit_tooltip_archetype">Tooltip Archetype</label>
-                      <select id="edit_tooltip_archetype">
-                        <option value="">leer</option>
-                        <option value="weapon">weapon</option>
-                        <option value="armor">armor</option>
-                        <option value="jewelry">jewelry</option>
-                        <option value="offhand">offhand</option>
-                        <option value="backpack">backpack</option>
-                        <option value="artifact">artifact</option>
-                        <option value="special">special</option>
-                      </select>
+                  <div id="editWeaponBlock" class="module-box hidden">
+                    <h3>Waffenwerte</h3>
+                    <div class="row">
+                      <div class="field col-4">
+                        <label for="edit_damage_min">Schaden Min</label>
+                        <input id="edit_damage_min" type="number" />
+                      </div>
+                      <div class="field col-4">
+                        <label for="edit_damage_max">Schaden Max</label>
+                        <input id="edit_damage_max" type="number" />
+                      </div>
+                      <div class="field col-4">
+                        <label for="edit_attacks_per_second">Angriffe pro Sekunde</label>
+                        <input id="edit_attacks_per_second" type="number" step="0.01" />
+                      </div>
                     </div>
                   </div>
 
-                  <div class="row">
-                    <div class="field col-3">
-                      <label for="edit_level_requirement">Item Level / Level Requirement</label>
-                      <input id="edit_level_requirement" type="number" min="1" />
-                    </div>
-
-                    <div class="field col-3">
-                      <label for="edit_binding_mode">Binding Mode</label>
-                      <select id="edit_binding_mode">
-                        <option value="tradable">tradable</option>
-                        <option value="account_bound">account_bound</option>
-                        <option value="bind_on_equip">bind_on_equip</option>
-                        <option value="bind_on_pickup">bind_on_pickup</option>
-                      </select>
-                    </div>
-
-                    <div class="field col-3">
-                      <label for="edit_source_type">Source Type</label>
-                      <select id="edit_source_type">
-                        <option value="drop">drop</option>
-                        <option value="crafted">crafted</option>
-                        <option value="quest">quest</option>
-                        <option value="vendor">vendor</option>
-                        <option value="event">event</option>
-                      </select>
-                    </div>
-
-                    <div class="field col-3">
-                      <label for="edit_crafted_tier">Crafted Tier</label>
-                      <input id="edit_crafted_tier" type="number" min="1" />
+                  <div id="editArmorBlock" class="module-box hidden">
+                    <h3>Rüstungswerte</h3>
+                    <div class="row">
+                      <div class="field col-4">
+                        <label for="edit_armor_min">Grundrüstung Min</label>
+                        <input id="edit_armor_min" type="number" />
+                      </div>
+                      <div class="field col-4">
+                        <label for="edit_armor_max">Grundrüstung Max</label>
+                        <input id="edit_armor_max" type="number" />
+                      </div>
+                      <div class="field col-4">
+                        <label for="edit_block_base">Blockwert Basis</label>
+                        <input id="edit_block_base" type="number" step="0.01" />
+                      </div>
                     </div>
                   </div>
 
-                  <div class="row">
-                    <div class="field col-3">
-                      <label for="edit_damage_min">Damage Min</label>
-                      <input id="edit_damage_min" type="number" />
-                    </div>
-
-                    <div class="field col-3">
-                      <label for="edit_damage_max">Damage Max</label>
-                      <input id="edit_damage_max" type="number" />
-                    </div>
-
-                    <div class="field col-3">
-                      <label for="edit_attacks_per_second">APS</label>
-                      <input id="edit_attacks_per_second" type="number" step="0.01" />
-                    </div>
-
-                    <div class="field col-3">
-                      <label for="edit_armor_base">Armor Base</label>
-                      <input id="edit_armor_base" type="number" />
-                    </div>
-                  </div>
-
-                  <div class="row">
-                    <div class="field col-3">
-                      <label for="edit_block_base">Block Base</label>
-                      <input id="edit_block_base" type="number" step="0.01" />
-                    </div>
-
-                    <div class="field col-3">
-                      <label for="edit_min_sockets">Min Sockets</label>
-                      <input id="edit_min_sockets" type="number" min="0" />
-                    </div>
-
-                    <div class="field col-3">
-                      <label for="edit_max_sockets">Max Sockets</label>
-                      <input id="edit_max_sockets" type="number" min="0" />
-                    </div>
-
-                    <div class="field col-3">
-                      <label for="edit_rarity_label">Rarity Label</label>
-                      <input id="edit_rarity_label" type="text" />
-                    </div>
-                  </div>
-
-                  <div class="row">
-                    <div class="field col-3">
-                      <label>
-                        <input id="edit_is_unique_equipped" type="checkbox" />
-                        Unique Equipped
-                      </label>
-                    </div>
-
-                    <div class="field col-3">
-                      <label>
-                        <input id="edit_can_have_gems" type="checkbox" />
-                        Can Have Gems
-                      </label>
-                    </div>
-
-                    <div class="field col-3">
-                      <label>
-                        <input id="edit_can_roll_primary_affixes" type="checkbox" />
-                        Can Roll Primary Affixes
-                      </label>
-                    </div>
-
-                    <div class="field col-3">
-                      <label>
-                        <input id="edit_can_roll_secondary_affixes" type="checkbox" />
-                        Can Roll Secondary Affixes
-                      </label>
-                    </div>
-                  </div>
-
-                  <div class="row">
-                    <div class="field col-4">
-                      <label for="edit_random_primary_min">Random Primary Min</label>
-                      <input id="edit_random_primary_min" type="number" min="0" />
-                    </div>
-                    <div class="field col-4">
-                      <label for="edit_random_primary_max">Random Primary Max</label>
-                      <input id="edit_random_primary_max" type="number" min="0" />
-                    </div>
-                    <div class="field col-4">
-                      <label for="edit_random_secondary_min">Random Secondary Min</label>
-                      <input id="edit_random_secondary_min" type="number" min="0" />
-                    </div>
-                  </div>
-
-                  <div class="row">
-                    <div class="field col-4">
-                      <label for="edit_random_secondary_max">Random Secondary Max</label>
-                      <input id="edit_random_secondary_max" type="number" min="0" />
-                    </div>
-                    <div class="field col-4">
-                      <label for="edit_item_set_code">Item Set Code</label>
-                      <input id="edit_item_set_code" type="text" />
-                    </div>
-                    <div class="field col-4">
-                      <label for="edit_appearance_code">Appearance Code</label>
-                      <input id="edit_appearance_code" type="text" />
-                    </div>
-                  </div>
-
-                  <div class="row">
-                    <div class="field col-12">
-                      <label for="edit_description">Description</label>
-                      <textarea id="edit_description"></textarea>
-                    </div>
-                  </div>
-
-                  <div class="row">
-                    <div class="field col-12">
-                      <label for="edit_flavor_text">Flavor Text</label>
-                      <textarea id="edit_flavor_text"></textarea>
+                  <div class="module-box">
+                    <h3>Zufällige Affixe</h3>
+                    <div class="row">
+                      <div class="field col-3">
+                        <label for="edit_random_primary_min">Random Primary Min</label>
+                        <input id="edit_random_primary_min" type="number" min="0" />
+                      </div>
+                      <div class="field col-3">
+                        <label for="edit_random_primary_max">Random Primary Max</label>
+                        <input id="edit_random_primary_max" type="number" min="0" />
+                      </div>
+                      <div class="field col-3">
+                        <label for="edit_random_secondary_min">Random Secondary Min</label>
+                        <input id="edit_random_secondary_min" type="number" min="0" />
+                      </div>
+                      <div class="field col-3">
+                        <label for="edit_random_secondary_max">Random Secondary Max</label>
+                        <input id="edit_random_secondary_max" type="number" min="0" />
+                      </div>
                     </div>
                   </div>
 
                   <div class="section-header">
-                    <h3>Feste Properties</h3>
-                    <button type="button" id="btnAddEditFixed" class="btn-secondary btn-small">+ Fixed Property</button>
+                    <h3>Affix-Module</h3>
+                    <button type="button" id="btnAddEditAffixModule" class="btn-secondary btn-small">+ Affix-Modul</button>
                   </div>
-                  <div id="editFixedList" class="repeater-list"></div>
+                  <div id="editAffixModuleList"></div>
 
-                  <div class="section-header">
-                    <h3>Choice Groups</h3>
-                    <button type="button" id="btnAddEditChoiceGroup" class="btn-secondary btn-small">+ Choice Group</button>
+                  <div class="module-box">
+                    <div class="row">
+                      <div class="field col-3">
+                        <label>
+                          <input id="edit_has_power" type="checkbox" />
+                          Macht vorhanden
+                        </label>
+                      </div>
+                    </div>
+
+                    <div id="editPowerBlock" class="hidden">
+                      <div class="row">
+                        <div class="field col-12">
+                          <label for="edit_power_description">Macht Beschreibung</label>
+                          <textarea id="edit_power_description"></textarea>
+                        </div>
+                      </div>
+                      <div class="row">
+                        <div class="field col-3">
+                          <label for="edit_power_value_min">Macht Wert Min</label>
+                          <input id="edit_power_value_min" type="number" step="0.01" />
+                        </div>
+                        <div class="field col-3">
+                          <label for="edit_power_value_max">Macht Wert Max</label>
+                          <input id="edit_power_value_max" type="number" step="0.01" />
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div id="editChoiceGroupList" class="repeater-list"></div>
 
-                  <div class="toolbar" style="margin-top:16px;">
+                  <div class="module-box">
+                    <h3>Meta</h3>
+                    <div class="row">
+                      <div class="field col-3">
+                        <label>
+                          <input id="edit_is_crafted" type="checkbox" />
+                          Herstellbar
+                        </label>
+                      </div>
+                      <div class="field col-3">
+                        <label for="edit_crafted_by">Herstellbar bei</label>
+                        <select id="edit_crafted_by">
+                          <option value="">-</option>
+                          <option value="blacksmith">Schmied</option>
+                          <option value="jeweler">Juwelier</option>
+                        </select>
+                      </div>
+                      <div class="field col-3">
+                        <label for="edit_crafted_tier">Craft Tier</label>
+                        <input id="edit_crafted_tier" type="number" min="1" />
+                      </div>
+                      <div class="field col-3">
+                        <label for="edit_binding_mode">Binding</label>
+                        <select id="edit_binding_mode">
+                          <option value="tradable">tradable</option>
+                          <option value="account_bound">account_bound</option>
+                          <option value="bind_on_equip">bind_on_equip</option>
+                          <option value="bind_on_pickup">bind_on_pickup</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div class="row">
+                      <div class="field col-3">
+                        <label>
+                          <input id="edit_is_unique_equipped" type="checkbox" />
+                          Unique Equipped
+                        </label>
+                      </div>
+                      <div class="field col-3">
+                        <label for="edit_level_requirement">Item Level</label>
+                        <input id="edit_level_requirement" type="number" min="1" />
+                      </div>
+                      <div class="field col-3">
+                        <label for="edit_rarity_label">Rarity Label</label>
+                        <input id="edit_rarity_label" type="text" />
+                      </div>
+                      <div class="field col-3">
+                        <label for="edit_appearance_code">Appearance Code</label>
+                        <input id="edit_appearance_code" type="text" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="toolbar">
                     <button type="submit" class="btn-primary">Änderungen speichern</button>
                     <button type="button" id="btnDeleteItem" class="btn-danger">Item löschen</button>
                   </div>
@@ -1010,19 +866,17 @@
 
               <div class="preview-sticky">
                 <h2>Live-Vorschau</h2>
-                <div id="editPreviewBox" class="tooltip-preview-shell">
+                <div class="tooltip-preview-shell">
                   <div id="editPreviewContent">
-                    <div class="preview-hint">
-                      Wähle links ein Item aus, dann erscheint hier die Vorschau.
-                    </div>
+                    <div class="preview-hint">Wähle links ein Item aus, dann erscheint hier die Vorschau.</div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
+
         </div>
       </div>
-
     </div>
   </div>
 
