@@ -340,20 +340,21 @@ function buildChoiceGroupPreviewLines(groups) {
     const category = group.property_category || "primary";
     const options = group.options || [];
 
+    const groupLines = [];
+
     if (label) {
-      if (category === "primary") primary.push(label);
-      if (category === "secondary") secondary.push(label);
-      if (category === "power") power.push(label);
+      groupLines.push(label);
     }
 
     options.forEach(opt => {
       const line = buildFixedPreviewLine(opt);
       if (!line) return;
-
-      if (category === "primary") primary.push(` ${line}`);
-      if (category === "secondary") secondary.push(` ${line}`);
-      if (category === "power") power.push(` ${line}`);
+      groupLines.push(` ${line}`);
     });
+
+    if (category === "primary") primary.push(...groupLines);
+    if (category === "secondary") secondary.push(...groupLines);
+    if (category === "power") power.push(...groupLines);
   });
 
   return { primary, secondary, power };
