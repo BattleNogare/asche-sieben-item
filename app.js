@@ -458,6 +458,7 @@ function getAffixesAllowedForCurrentItemType(itemType, category = null, search =
 
 function createAffixModuleHtml(prefix, moduleId, data = null) {
   const always = data?.is_always_present ? "checked" : "";
+
   return `
     <div class="module-box affix-module" data-module-id="${moduleId}">
       <div class="row">
@@ -485,7 +486,7 @@ function createAffixModuleHtml(prefix, moduleId, data = null) {
         </div>
         <div class="field col-3">
           <label>Suche Affix</label>
-          <input class="affix-search" type="text" placeholder="suchen..." />
+          <input class="affix-search" type="text" placeholder="z.B. Intelligenz, Krit, Leben..." />
         </div>
         <div class="field col-2">
           <label>&nbsp;</label>
@@ -496,8 +497,42 @@ function createAffixModuleHtml(prefix, moduleId, data = null) {
       <div class="module-fixed-block">
         <div class="row">
           <div class="field col-12">
-            <label>Affix auswählen</label>
+            <label>Passendstes Affix auswählen</label>
             <select class="affix-select"></select>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="field col-3">
+            <label>stat_name</label>
+            <input class="fixed-stat-name" type="text" />
+          </div>
+          <div class="field col-3">
+            <label>mod_type</label>
+            <input class="fixed-mod-type" type="text" />
+          </div>
+          <div class="field col-3">
+            <label>value_min</label>
+            <input class="fixed-value-min" type="number" step="0.01" />
+          </div>
+          <div class="field col-3">
+            <label>value_max</label>
+            <input class="fixed-value-max" type="number" step="0.01" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="field col-3">
+            <label>value2_min</label>
+            <input class="fixed-value2-min" type="number" step="0.01" />
+          </div>
+          <div class="field col-3">
+            <label>value2_max</label>
+            <input class="fixed-value2-max" type="number" step="0.01" />
+          </div>
+          <div class="field col-6">
+            <label>description_template</label>
+            <input class="fixed-desc-template" type="text" />
           </div>
         </div>
       </div>
@@ -548,13 +583,51 @@ function createChoiceOptionHtml(data = null) {
   return `
     <div class="module-mini choice-option">
       <div class="row">
-        <div class="field col-8">
+        <div class="field col-4">
+          <label>Suche Affix</label>
+          <input class="choice-option-search" type="text" placeholder="z.B. Intelligenz, Krit..." />
+        </div>
+        <div class="field col-6">
           <label>Affix auswählen</label>
           <select class="choice-option-affix-select"></select>
         </div>
         <div class="field col-2">
           <label>Weight</label>
           <input class="choice-option-weight" type="number" min="1" value="${data?.spawn_weight ?? 1}" />
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field col-3">
+          <label>stat_name</label>
+          <input class="choice-stat-name" type="text" />
+        </div>
+        <div class="field col-3">
+          <label>mod_type</label>
+          <input class="choice-mod-type" type="text" />
+        </div>
+        <div class="field col-3">
+          <label>value_min</label>
+          <input class="choice-value-min" type="number" step="0.01" />
+        </div>
+        <div class="field col-3">
+          <label>value_max</label>
+          <input class="choice-value-max" type="number" step="0.01" />
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field col-3">
+          <label>value2_min</label>
+          <input class="choice-value2-min" type="number" step="0.01" />
+        </div>
+        <div class="field col-3">
+          <label>value2_max</label>
+          <input class="choice-value2-max" type="number" step="0.01" />
+        </div>
+        <div class="field col-4">
+          <label>description_template</label>
+          <input class="choice-desc-template" type="text" />
         </div>
         <div class="field col-2">
           <label>&nbsp;</label>
@@ -584,37 +657,69 @@ function refreshSingleAffixModule(mod, itemType) {
   randomFillBlock.classList.toggle("hidden", kind !== "random_fill");
   choiceBlock.classList.toggle("hidden", kind !== "choice_group");
 
-  const affixes = getAffixesAllowedForCurrentItemType(itemType, category, search);
+  const ranked = rankAffixesForItemType(itemType, category, search);
 
   const fixedSelect = mod.querySelector(".affix-select");
   if (fixedSelect) {
-    const current = fixedSelect.dataset.value || fixedSelect.value || "";
+    const previous = fixedSelect.dataset.value || fixedSelect.value || "";
     fixedSelect.innerHTML = `<option value="">- bitte wählen -</option>`;
-    affixes.forEach(def => {
+
+    ranked.slice(0, 50).forEach(def => {
       const opt = document.createElement("option");
       opt.value = def.id;
       opt.textContent = `${def.affix_code} | ${def.description_template}`;
-      if (String(def.id) === String(current)) opt.selected = true;
       fixedSelect.appendChild(opt);
     });
+
+    let selectedValue = previous;
+    if (!selectedValue && ranked.length) {
+      selectedValue = String(ranked[0].id);
+    }
+
+    fixedSelect.value = selectedValue;
+    fixedSelect.dataset.value = selectedValue;
+
+    const selectedDef = ranked.find(d => String(d.id) === String(selectedValue))
+      || state.affixDefinitions.find(d => String(d.id) === String(selectedValue));
+
+    if (selectedDef && !mod.dataset.fixedManualValues) {
+      setAffixOverrideFields(mod, selectedDef, "fixed-");
+    }
   }
 
-  mod.querySelectorAll(".choice-option-affix-select").forEach(select => {
-    const current = select.dataset.value || select.value || "";
+  mod.querySelectorAll(".choice-option").forEach(optionEl => {
+    const optionSearch = optionEl.querySelector(".choice-option-search")?.value || "";
+    const optionRanked = rankAffixesForItemType(itemType, category, optionSearch);
+
+    const select = optionEl.querySelector(".choice-option-affix-select");
+    const previous = select.dataset.value || select.value || "";
     select.innerHTML = `<option value="">- bitte wählen -</option>`;
-    affixes.forEach(def => {
+
+    optionRanked.slice(0, 50).forEach(def => {
       const opt = document.createElement("option");
       opt.value = def.id;
       opt.textContent = `${def.affix_code} | ${def.description_template}`;
-      if (String(def.id) === String(current)) opt.selected = true;
       select.appendChild(opt);
     });
+
+    let selectedValue = previous;
+    if (!selectedValue && optionRanked.length) {
+      selectedValue = String(optionRanked[0].id);
+    }
+
+    select.value = selectedValue;
+    select.dataset.value = selectedValue;
+
+    const selectedDef = optionRanked.find(d => String(d.id) === String(selectedValue))
+      || state.affixDefinitions.find(d => String(d.id) === String(selectedValue));
+
+    if (selectedDef && !optionEl.dataset.manualValues) {
+      setAffixOverrideFields(optionEl, selectedDef, "choice-");
+    }
   });
 }
 
 function bindAffixModuleEvents(container, prefix) {
-  const itemType = getSelectedItemType(prefix);
-
   container.querySelectorAll(".affix-module").forEach(mod => {
     mod.querySelector(".btn-remove-affix-module").onclick = () => {
       mod.remove();
@@ -622,26 +727,45 @@ function bindAffixModuleEvents(container, prefix) {
     };
 
     mod.querySelector(".affix-module-kind").onchange = () => {
+      mod.dataset.fixedManualValues = "";
       refreshSingleAffixModule(mod, getSelectedItemType(prefix));
       prefix === "create" ? updateCreatePreview() : updateEditPreview();
     };
 
     mod.querySelector(".affix-property-category").onchange = () => {
+      mod.dataset.fixedManualValues = "";
       refreshSingleAffixModule(mod, getSelectedItemType(prefix));
       prefix === "create" ? updateCreatePreview() : updateEditPreview();
     };
 
     mod.querySelector(".affix-search").oninput = () => {
+      mod.dataset.fixedManualValues = "";
       refreshSingleAffixModule(mod, getSelectedItemType(prefix));
+      prefix === "create" ? updateCreatePreview() : updateEditPreview();
     };
 
     const fixedSelect = mod.querySelector(".affix-select");
     if (fixedSelect) {
       fixedSelect.onchange = () => {
         fixedSelect.dataset.value = fixedSelect.value;
+        const def = state.affixDefinitions.find(a => String(a.id) === String(fixedSelect.value));
+        mod.dataset.fixedManualValues = "";
+        if (def) setAffixOverrideFields(mod, def, "fixed-");
         prefix === "create" ? updateCreatePreview() : updateEditPreview();
       };
     }
+
+    mod.querySelectorAll(".fixed-stat-name,.fixed-mod-type,.fixed-value-min,.fixed-value-max,.fixed-value2-min,.fixed-value2-max,.fixed-desc-template")
+      .forEach(el => {
+        el.oninput = () => {
+          mod.dataset.fixedManualValues = "1";
+          prefix === "create" ? updateCreatePreview() : updateEditPreview();
+        };
+        el.onchange = () => {
+          mod.dataset.fixedManualValues = "1";
+          prefix === "create" ? updateCreatePreview() : updateEditPreview();
+        };
+      });
 
     const btnAddChoice = mod.querySelector(".btn-add-choice-option");
     if (btnAddChoice) {
@@ -654,20 +778,57 @@ function bindAffixModuleEvents(container, prefix) {
       };
     }
 
-    mod.querySelectorAll(".btn-remove-choice-option").forEach(btn => {
-      btn.onclick = () => {
-        btn.closest(".choice-option").remove();
-        prefix === "create" ? updateCreatePreview() : updateEditPreview();
-      };
+    mod.querySelectorAll(".choice-option").forEach(optionEl => {
+      const searchInput = optionEl.querySelector(".choice-option-search");
+      const select = optionEl.querySelector(".choice-option-affix-select");
+      const removeBtn = optionEl.querySelector(".btn-remove-choice-option");
+
+      if (searchInput) {
+        searchInput.oninput = () => {
+          optionEl.dataset.manualValues = "";
+          refreshSingleAffixModule(mod, getSelectedItemType(prefix));
+          prefix === "create" ? updateCreatePreview() : updateEditPreview();
+        };
+      }
+
+      if (select) {
+        select.onchange = () => {
+          select.dataset.value = select.value;
+          const def = state.affixDefinitions.find(a => String(a.id) === String(select.value));
+          optionEl.dataset.manualValues = "";
+          if (def) setAffixOverrideFields(optionEl, def, "choice-");
+          prefix === "create" ? updateCreatePreview() : updateEditPreview();
+        };
+      }
+
+      optionEl.querySelectorAll(".choice-stat-name,.choice-mod-type,.choice-value-min,.choice-value-max,.choice-value2-min,.choice-value2-max,.choice-desc-template,.choice-option-weight")
+        .forEach(el => {
+          el.oninput = () => {
+            optionEl.dataset.manualValues = "1";
+            prefix === "create" ? updateCreatePreview() : updateEditPreview();
+          };
+          el.onchange = () => {
+            optionEl.dataset.manualValues = "1";
+            prefix === "create" ? updateCreatePreview() : updateEditPreview();
+          };
+        });
+
+      if (removeBtn) {
+        removeBtn.onclick = () => {
+          optionEl.remove();
+          prefix === "create" ? updateCreatePreview() : updateEditPreview();
+        };
+      }
     });
 
-    mod.querySelectorAll("input,select,textarea").forEach(el => {
-      el.oninput = () => prefix === "create" ? updateCreatePreview() : updateEditPreview();
-      el.onchange = () => prefix === "create" ? updateCreatePreview() : updateEditPreview();
-    });
+    mod.querySelectorAll(".random-fill-description,.random-fill-count,.random-fill-order,.choice-group-label,.choice-group-choose-count,.choice-group-order")
+      .forEach(el => {
+        el.oninput = () => prefix === "create" ? updateCreatePreview() : updateEditPreview();
+        el.onchange = () => prefix === "create" ? updateCreatePreview() : updateEditPreview();
+      });
   });
 
-  refreshAffixModuleSelects(container, itemType);
+  refreshAffixModuleSelects(container, getSelectedItemType(prefix));
 }
 
 function getTooltipArchetypeFromForm(prefix) {
@@ -727,14 +888,26 @@ function collectAffixModules(prefix) {
     if (kind === "fixed") {
       const affixId = parseNullableNumber(mod.querySelector(".affix-select").value, true);
       if (!affixId) return;
+
       const def = state.affixDefinitions.find(a => a.id === affixId);
       if (!def) return;
+
+      const override = readAffixOverrideFields(mod, "fixed-");
 
       modules.push({
         kind,
         property_category,
         is_always_present,
-        affix_definition: def,
+        affix_definition: {
+          ...def,
+          stat_name: override.stat_name || def.stat_name,
+          mod_type: override.mod_type || def.mod_type,
+          value_min: override.value_min,
+          value_max: override.value_max,
+          value2_min: override.value2_min,
+          value2_max: override.value2_max,
+          description_template: override.description_template || def.description_template
+        },
         display_order: (idx + 1) * 10
       });
     }
@@ -762,10 +935,23 @@ function collectAffixModules(prefix) {
       mod.querySelectorAll(".choice-option").forEach((optEl, optionIndex) => {
         const affixId = parseNullableNumber(optEl.querySelector(".choice-option-affix-select").value, true);
         if (!affixId) return;
+
         const def = state.affixDefinitions.find(a => a.id === affixId);
         if (!def) return;
+
+        const override = readAffixOverrideFields(optEl, "choice-");
+
         options.push({
-          affix_definition: def,
+          affix_definition: {
+            ...def,
+            stat_name: override.stat_name || def.stat_name,
+            mod_type: override.mod_type || def.mod_type,
+            value_min: override.value_min,
+            value_max: override.value_max,
+            value2_min: override.value2_min,
+            value2_max: override.value2_max,
+            description_template: override.description_template || def.description_template
+          },
           spawn_weight: parseNullableNumber(optEl.querySelector(".choice-option-weight").value, true) || 1,
           display_order: (optionIndex + 1) * 10
         });
@@ -828,6 +1014,7 @@ function buildDescriptionFromAffix(def) {
 
   text = text.replaceAll("{value}", value !== null && value !== undefined ? String(value) : "");
   text = text.replaceAll("{value2}", value2 !== null && value2 !== undefined ? String(value2) : "");
+
   return text.trim();
 }
 
@@ -1426,12 +1613,151 @@ async function loadItemIntoEdit(itemId) {
 }
 
 function findAffixDefinitionIdByDefinitionLike(row) {
-  const match = state.affixDefinitions.find(def =>
-    def.stat_name === row.stat_name &&
-    def.mod_type === row.mod_type &&
-    String(def.description_template || "") === String(row.description_template || "")
-  );
-  return match?.id || "";
+  const scored = state.affixDefinitions.map(def => {
+    let score = 0;
+
+    if (def.stat_name === row.stat_name) score += 500;
+    if (def.mod_type === row.mod_type) score += 300;
+    if (String(def.description_template || "") === String(row.description_template || "")) score += 800;
+
+    if (def.value_min == row.value_min) score += 100;
+    if (def.value_max == row.value_max) score += 100;
+    if (def.value2_min == row.value2_min) score += 50;
+    if (def.value2_max == row.value2_max) score += 50;
+
+    return { def, score };
+  }).sort((a, b) => b.score - a.score);
+
+  return scored[0]?.def?.id || "";
+}
+
+function normalizeForSearch(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ß/g, "ss")
+    .replace(/ä/g, "a")
+    .replace(/ö/g, "o")
+    .replace(/ü/g, "u")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function levenshtein(a, b) {
+  a = normalizeForSearch(a);
+  b = normalizeForSearch(b);
+
+  const matrix = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
+
+  for (let i = 0; i <= a.length; i++) matrix[i][0] = i;
+  for (let j = 0; j <= b.length; j++) matrix[0][j] = j;
+
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost
+      );
+    }
+  }
+
+  return matrix[a.length][b.length];
+}
+
+function fuzzyScoreAffix(def, query) {
+  const q = normalizeForSearch(query);
+  if (!q) return 0;
+
+  const code = normalizeForSearch(def.affix_code || "");
+  const stat = normalizeForSearch(def.stat_name || "");
+  const desc = normalizeForSearch(def.description_template || "");
+
+  let score = 0;
+
+  if (code === q) score += 1000;
+  if (stat === q) score += 1000;
+  if (desc === q) score += 1000;
+
+  if (code.includes(q)) score += 400;
+  if (stat.includes(q)) score += 600;
+  if (desc.includes(q)) score += 500;
+
+  const qTokens = q.split(" ").filter(Boolean);
+  for (const token of qTokens) {
+    if (code.includes(token)) score += 90;
+    if (stat.includes(token)) score += 120;
+    if (desc.includes(token)) score += 110;
+  }
+
+  const statDistance = levenshtein(q, stat);
+  const codeDistance = levenshtein(q, code);
+  const descDistance = levenshtein(q, desc);
+
+  score += Math.max(0, 120 - statDistance * 10);
+  score += Math.max(0, 80 - codeDistance * 8);
+  score += Math.max(0, 70 - descDistance * 5);
+
+  return score;
+}
+
+function rankAffixesForItemType(itemType, category = null, search = "") {
+  const allowedIds = state.affixAllowedByType.get(itemType) || new Set();
+  const q = search.trim();
+
+  return state.affixDefinitions
+    .filter(def => {
+      if (!allowedIds.has(def.id)) return false;
+      if (category && def.affix_category !== category) return false;
+      return true;
+    })
+    .map(def => ({
+      ...def,
+      _score: fuzzyScoreAffix(def, q)
+    }))
+    .sort((a, b) => {
+      if (q) {
+        if (b._score !== a._score) return b._score - a._score;
+      }
+      if ((a.sort_order || 0) !== (b.sort_order || 0)) {
+        return (a.sort_order || 0) - (b.sort_order || 0);
+      }
+      return String(a.affix_code || "").localeCompare(String(b.affix_code || ""));
+    });
+}
+
+function setAffixOverrideFields(root, def, prefix = "") {
+  if (!root || !def) return;
+
+  const minEl = root.querySelector(`.${prefix}value-min`);
+  const maxEl = root.querySelector(`.${prefix}value-max`);
+  const min2El = root.querySelector(`.${prefix}value2-min`);
+  const max2El = root.querySelector(`.${prefix}value2-max`);
+  const statEl = root.querySelector(`.${prefix}stat-name`);
+  const modEl = root.querySelector(`.${prefix}mod-type`);
+  const descEl = root.querySelector(`.${prefix}desc-template`);
+
+  if (minEl) minEl.value = def.value_min ?? "";
+  if (maxEl) maxEl.value = def.value_max ?? "";
+  if (min2El) min2El.value = def.value2_min ?? "";
+  if (max2El) max2El.value = def.value2_max ?? "";
+  if (statEl) statEl.value = def.stat_name ?? "";
+  if (modEl) modEl.value = def.mod_type ?? "";
+  if (descEl) descEl.value = def.description_template ?? "";
+}
+
+function readAffixOverrideFields(root, prefix = "") {
+  return {
+    stat_name: root.querySelector(`.${prefix}stat-name`)?.value?.trim() || null,
+    mod_type: root.querySelector(`.${prefix}mod-type`)?.value?.trim() || null,
+    value_min: parseNullableNumber(root.querySelector(`.${prefix}value-min`)?.value, false),
+    value_max: parseNullableNumber(root.querySelector(`.${prefix}value-max`)?.value, false),
+    value2_min: parseNullableNumber(root.querySelector(`.${prefix}value2-min`)?.value, false),
+    value2_max: parseNullableNumber(root.querySelector(`.${prefix}value2-max`)?.value, false),
+    description_template: root.querySelector(`.${prefix}desc-template`)?.value?.trim() || ""
+  };
 }
 
 function fillEditForm(item, fixedRows, groups, options) {
@@ -1486,8 +1812,20 @@ function fillEditForm(item, fixedRows, groups, options) {
       property_category: row.property_category,
       is_always_present: row.is_always_present
     }));
+
     const mod = modRoot.lastElementChild;
-    mod.querySelector(".affix-select").dataset.value = String(findAffixDefinitionIdByDefinitionLike(row));
+    const affixId = findAffixDefinitionIdByDefinitionLike(row);
+
+    mod.querySelector(".affix-select").dataset.value = String(affixId || "");
+    mod.querySelector(".affix-search").value = row.stat_name || row.description_template || "";
+    mod.querySelector(".fixed-stat-name").value = row.stat_name ?? "";
+    mod.querySelector(".fixed-mod-type").value = row.mod_type ?? "";
+    mod.querySelector(".fixed-value-min").value = row.value_min ?? "";
+    mod.querySelector(".fixed-value-max").value = row.value_max ?? "";
+    mod.querySelector(".fixed-value2-min").value = row.value2_min ?? "";
+    mod.querySelector(".fixed-value2-max").value = row.value2_max ?? "";
+    mod.querySelector(".fixed-desc-template").value = row.description_template ?? "";
+    mod.dataset.fixedManualValues = "1";
   });
 
   groups.forEach((group, idx) => {
@@ -1506,11 +1844,24 @@ function fillEditForm(item, fixedRows, groups, options) {
     }));
 
     const mod = modRoot.lastElementChild;
+
     if (!isRandomFill) {
       const list = mod.querySelector(".choice-options-list");
       groupOptions.forEach(opt => {
         list.insertAdjacentHTML("beforeend", createChoiceOptionHtml({ spawn_weight: opt.spawn_weight }));
-        list.lastElementChild.querySelector(".choice-option-affix-select").dataset.value = String(findAffixDefinitionIdByDefinitionLike(opt));
+        const optionEl = list.lastElementChild;
+
+        const affixId = findAffixDefinitionIdByDefinitionLike(opt);
+        optionEl.querySelector(".choice-option-affix-select").dataset.value = String(affixId || "");
+        optionEl.querySelector(".choice-option-search").value = opt.stat_name || opt.description_template || "";
+        optionEl.querySelector(".choice-stat-name").value = opt.stat_name ?? "";
+        optionEl.querySelector(".choice-mod-type").value = opt.mod_type ?? "";
+        optionEl.querySelector(".choice-value-min").value = opt.value_min ?? "";
+        optionEl.querySelector(".choice-value-max").value = opt.value_max ?? "";
+        optionEl.querySelector(".choice-value2-min").value = opt.value2_min ?? "";
+        optionEl.querySelector(".choice-value2-max").value = opt.value2_max ?? "";
+        optionEl.querySelector(".choice-desc-template").value = opt.description_template ?? "";
+        optionEl.dataset.manualValues = "1";
       });
     }
   });
