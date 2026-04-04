@@ -148,25 +148,49 @@ function debounce(fn, wait = 250) {
 
 // ---------- auth ----------
 async function getSessionAndProfile() {
-  const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
+  console.log("getSessionAndProfile: start");
+
+  const sessionResult = await Promise.race([
+    supabaseClient.auth.getSession(),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("getSession Timeout nach 10 Sekunden")), 10000)
+    )
+  ]);
+
+  console.log("getSessionAndProfile: getSession result", sessionResult);
+
+  const { data: sessionData, error: sessionError } = sessionResult;
   if (sessionError) throw sessionError;
 
   state.session = sessionData.session;
   state.user = sessionData.session?.user || null;
 
+  console.log("getSessionAndProfile: user", state.user);
+
   if (!state.user) {
+    console.log("getSessionAndProfile: kein user");
     state.profile = null;
     return;
   }
 
-  const { data: profile, error: profileError } = await supabaseClient
-    .from("profiles")
-    .select("*")
-    .eq("id", state.user.id)
-    .maybeSingle();
+  const profileResult = await Promise.race([
+    supabaseClient
+      .from("profiles")
+      .select("*")
+      .eq("id", state.user.id)
+      .maybeSingle(),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("profiles Query Timeout nach 10 Sekunden")), 10000)
+    )
+  ]);
 
+  console.log("getSessionAndProfile: profile result", profileResult);
+
+  const { data: profile, error: profileError } = profileResult;
   if (profileError) throw profileError;
+
   state.profile = profile || null;
+  console.log("getSessionAndProfile: done", state.profile);
 }
 
 function isAllowedUser() {
@@ -186,23 +210,26 @@ async function login() {
       return;
     }
 
+    console.log("login: vor signInWithPassword");
+
     const { data, error } = await supabaseClient.auth.signInWithPassword({
       email,
       password
     });
 
-    console.log("Login result:", data, error);
+    console.log("login: nach signInWithPassword", data, error);
 
-    if (error) {
-      throw error;
-    }
+    if (error) throw error;
 
-    showStatus("Login erfolgreich. Initialisiere App...", "ok");
+    showStatus("Login erfolgreich. Lade App...", "ok");
 
-    // Kein direktes await initAppAfterAuth() hier nötig.
-    // Das übernimmt gleich der Auth-State-Handler sauber.
+    console.log("login: vor initAppAfterAuth");
+    await initAppAfterAuth();
+    console.log("login: nach initAppAfterAuth");
+
+    showStatus("Login erfolgreich.", "ok");
   } catch (err) {
-    console.error("Login Catch Fehler:", err);
+    console.error("login catch:", err);
     showStatus(`Login fehlgeschlagen:\n${err.message}`, "error");
   }
 }
@@ -1337,50 +1364,78 @@ function wireUi() {
 
 // ---------- app init ----------
 async function initAppAfterAuth() {
+  console.log("initAppAfterAuth: start");
+
   await getSessionAndProfile();
+  console.log("initAppAfterAuth: after getSessionAndProfile");
 
   if (!state.user) {
+    console.log("initAppAfterAuth: no user -> authCard zeigen");
     $("authCard").classList.remove("hidden");
     $("appShell").classList.add("hidden");
     return;
   }
 
   if (!state.profile) {
+    console.log("initAppAfterAuth: profile fehlt");
     $("authCard").classList.remove("hidden");
     $("appShell").classList.add("hidden");
     throw new Error("Kein Profil für diesen Benutzer gefunden.");
   }
 
+  console.log("initAppAfterAuth: user + profile vorhanden", state.user.id, state.profile.id);
+
   if (!isAllowedUser()) {
+    console.log("initAppAfterAuth: user NICHT erlaubt");
     $("authCard").classList.add("hidden");
     $("appShell").classList.add("hidden");
     throw new Error(`Dieser Benutzer darf das Tool nicht verwenden.\n\nErlaubt ist nur Profil-ID:\n${ALLOWED_PROFILE_ID}`);
   }
 
+  console.log("initAppAfterAuth: user erlaubt");
+
   $("authCard").classList.add("hidden");
   $("appShell").classList.remove("hidden");
   $("whoami").textContent = state.user.email || state.user.id;
-  $("profileInfo").textContent = `${state.profile.display_name} (${state.profile.id})`;
+  $("profileInfo").textContent = `${state.profile.display_name || "-"} (${state.profile.id})`;
 
-  await loadReferenceData();
-  await loadItemsForList();
-  await refreshCreateAutoFields();
+  console.log("initAppAfterAuth: vor loadReferenceData");
+  await Promise.race([
+    loadReferenceData(),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("loadReferenceData Timeout nach 10 Sekunden")), 10000)
+    )
+  ]);
+  console.log("initAppAfterAuth: nach loadReferenceData");
+
+  console.log("initAppAfterAuth: vor loadItemsForList");
+  await Promise.race([
+    loadItemsForList(),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("loadItemsForList Timeout nach 10 Sekunden")), 10000)
+    )
+  ]);
+  console.log("initAppAfterAuth: nach loadItemsForList");
+
+  console.log("initAppAfterAuth: vor refreshCreateAutoFields");
+  await Promise.race([
+    refreshCreateAutoFields(),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("refreshCreateAutoFields Timeout nach 10 Sekunden")), 10000)
+    )
+  ]);
+  console.log("initAppAfterAuth: fertig");
 }
 
 async function init() {
   wireUi();
 
-  supabaseClient.auth.onAuthStateChange(async () => {
-    try {
-      await initAppAfterAuth();
-    } catch (err) {
-      showStatus(err.message, "error");
-    }
-  });
-
   try {
+    console.log("init: starte initAppAfterAuth beim Laden");
     await initAppAfterAuth();
+    console.log("init: fertig");
   } catch (err) {
+    console.error("init Fehler:", err);
     if (state.user) {
       showStatus(err.message, "error");
     }
