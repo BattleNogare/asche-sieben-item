@@ -134,8 +134,399 @@ function buildRarityLabelFallback(rarity, itemType, archetype) {
   return prefix ? `${prefix} ${base}` : base;
 }
 
+function formatPreviewNumber(value, decimals = 0) {
+  if (value === null || value === undefined || value === "") return null;
+  const num = Number(value);
+  if (Number.isNaN(num)) return null;
+
+  return num.toLocaleString("de-DE", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals
+  });
+}
+
+function buildPreviewRarityClass(rarity) {
+  if (!rarity) return "rarity-normal";
+  if (["legendary", "unique", "unreal"].includes(rarity)) return "rarity-legendary";
+  if (rarity === "rare") return "rarity-rare";
+  if (rarity === "magic") return "rarity-magic";
+  return "rarity-normal";
+}
+
+function renderTooltipPreview(targetId, previewData) {
+  const target = $(targetId);
+  if (!target) return;
+
+  if (!previewData) {
+    target.innerHTML = `<div class="preview-hint">Keine Vorschau verfügbar.</div>`;
+    return;
+  }
+
+  const rarityClass = buildPreviewRarityClass(previewData.rarity);
+  const lines = [];
+
+  lines.push(`
+    <div class="tooltip-preview-title ${rarityClass}">
+      ${escapeHtml(previewData.display_name || "Unbenanntes Item")}
+    </div>
+  `);
+
+  if (previewData.rarity_label) {
+    lines.push(`<div class="tooltip-line ${rarityClass}">${escapeHtml(previewData.rarity_label)}</div>`);
+  }
+
+  if (previewData.header_lines?.length) {
+    previewData.header_lines.forEach(line => {
+      lines.push(`<div class="tooltip-line">${escapeHtml(line)}</div>`);
+    });
+  }
+
+  if (previewData.primary_lines?.length) {
+    lines.push(`<div class="tooltip-section-label">Primär</div>`);
+    previewData.primary_lines.forEach(line => {
+      lines.push(`<div class="tooltip-line">${escapeHtml(line)}</div>`);
+    });
+  }
+
+  if (previewData.secondary_lines?.length) {
+    lines.push(`<div class="tooltip-section-label">Sekundär</div>`);
+    previewData.secondary_lines.forEach(line => {
+      lines.push(`<div class="tooltip-line">${escapeHtml(line)}</div>`);
+    });
+  }
+
+  if (previewData.power_lines?.length) {
+    lines.push(`<div class="tooltip-section-label tooltip-power">Macht</div>`);
+    previewData.power_lines.forEach(line => {
+      lines.push(`<div class="tooltip-line tooltip-power">${escapeHtml(line)}</div>`);
+    });
+  }
+
+  if (previewData.footer_lines?.length) {
+    lines.push(`<div class="tooltip-divider"></div>`);
+    previewData.footer_lines.forEach(line => {
+      lines.push(`<div class="tooltip-line tooltip-footer">${escapeHtml(line)}</div>`);
+    });
+  }
+
+  target.innerHTML = `
+    ${lines.join("")}
+    <div class="preview-meta">
+      item_type: ${escapeHtml(previewData.item_type || "-")}<br>
+      equip_slot: ${escapeHtml(previewData.equip_slot || "-")}<br>
+      tooltip_archetype: ${escapeHtml(previewData.tooltip_archetype || "-")}
+    </div>
+  `;
+}
+
+function getPreviewBaseLabel(baseItem) {
+  return (
+    baseItem.rarity_label ||
+    buildRarityLabelFallback(baseItem.rarity, baseItem.item_type, baseItem.tooltip_archetype)
+  );
+}
+
+function buildPreviewHeaderLines(baseItem) {
+  const archetype = baseItem.tooltip_archetype || inferTooltipArchetype(baseItem.item_type, baseItem.equip_slot);
+  const lines = [];
+
+  if (archetype === "weapon") {
+    const dmgMin = parseNullableNumber(baseItem.damage_min, true);
+    const dmgMax = parseNullableNumber(baseItem.damage_max, true);
+    const aps = parseNullableNumber(baseItem.attacks_per_second, false);
+
+    if (dmgMin !== null && dmgMax !== null && aps !== null) {
+      const dps = (((dmgMin + dmgMax) / 2) * aps);
+      lines.push(formatPreviewNumber(dps, 1));
+      lines.push("Schaden pro Sekunde");
+      lines.push(`${formatPreviewNumber(dmgMin, 0)}-${formatPreviewNumber(dmgMax, 0)} Schaden`);
+      lines.push(`${formatPreviewNumber(aps, 2)} Angriffe pro Sekunde`);
+    }
+  } else if (archetype === "armor") {
+    const armor = parseNullableNumber(baseItem.armor_base, true);
+    if (armor !== null) {
+      lines.push(formatPreviewNumber(armor, 0));
+      lines.push("Rüstung");
+    }
+  }
+
+  return lines.filter(Boolean);
+}
+
+function buildFixedPreviewLine(row) {
+  if (!row) return null;
+
+  let text = row.description_template || "";
+
+  const value =
+    row.value_max !== null && row.value_max !== undefined
+      ? row.value_max
+      : row.value_min;
+
+  const value2 =
+    row.value2_max !== null && row.value2_max !== undefined
+      ? row.value2_max
+      : row.value2_min;
+
+  if (text.includes("{value}")) {
+    text = text.replaceAll("{value}", value !== null && value !== undefined ? String(value) : "");
+  }
+
+  if (text.includes("{value2}")) {
+    text = text.replaceAll("{value2}", value2 !== null && value2 !== undefined ? String(value2) : "");
+  }
+
+  return text.trim() || null;
+}
+
+function buildChoiceGroupPreviewLines(groups) {
+  const primary = [];
+  const secondary = [];
+  const power = [];
+
+  (groups || []).forEach(group => {
+    const label = (group.display_label || "").trim();
+    const category = group.property_category || "primary";
+    const options = group.options || [];
+
+    if (label) {
+      if (category === "primary") primary.push(label);
+      if (category === "secondary") secondary.push(label);
+      if (category === "power") power.push(label);
+    }
+
+    options.forEach(opt => {
+      const line = buildFixedPreviewLine(opt);
+      if (!line) return;
+
+      if (category === "primary") primary.push(` ${line}`);
+      if (category === "secondary") secondary.push(` ${line}`);
+      if (category === "power") power.push(` ${line}`);
+    });
+  });
+
+  return { primary, secondary, power };
+}
+
+function buildRandomAffixPreviewLines(baseItem) {
+  const primary = [];
+  const secondary = [];
+
+  const pMin = parseNullableNumber(baseItem.random_primary_min, true) ?? 0;
+  const pMax = parseNullableNumber(baseItem.random_primary_max, true) ?? 0;
+  const sMin = parseNullableNumber(baseItem.random_secondary_min, true) ?? 0;
+  const sMax = parseNullableNumber(baseItem.random_secondary_max, true) ?? 0;
+
+  if (pMin > 0 || pMax > 0) {
+    if (pMin === pMax) {
+      primary.push(`+${pMax} zufällige magische Eigenschaften`);
+    } else {
+      primary.push(`+${pMin}-${pMax} zufällige primäre Eigenschaften`);
+    }
+  }
+
+  if (sMin > 0 || sMax > 0) {
+    if (sMin === sMax) {
+      secondary.push(`+${sMax} zufällige sekundäre Eigenschaften`);
+    } else {
+      secondary.push(`+${sMin}-${sMax} zufällige sekundäre Eigenschaften`);
+    }
+  }
+
+  return { primary, secondary };
+}
+
+function buildFooterPreviewLines(baseItem) {
+  const lines = [];
+
+  if (baseItem.binding_mode === "tradable") lines.push("Handelbar");
+  if (baseItem.binding_mode === "account_bound") lines.push("Account Bound");
+  if (baseItem.binding_mode === "bind_on_equip") lines.push("Bind on Equip");
+  if (baseItem.binding_mode === "bind_on_pickup") lines.push("Bind on Pickup");
+
+  if (baseItem.is_unique_equipped) {
+    lines.push("Unique Equipped");
+  }
+
+  if (baseItem.source_type === "crafted" && baseItem.crafted_tier) {
+    lines.push(`Hergestellt von: Schmied (Stufe ${baseItem.crafted_tier})`);
+  }
+
+  if (baseItem.level_requirement !== null && baseItem.level_requirement !== undefined && baseItem.level_requirement !== "") {
+    lines.push(String(baseItem.level_requirement));
+  }
+
+  return lines;
+}
+
+function buildPreviewData(baseItem, fixedRows = [], choiceGroups = []) {
+  if (!baseItem) return null;
+
+  const header_lines = buildPreviewHeaderLines(baseItem);
+
+  const fixedPrimary = [];
+  const fixedSecondary = [];
+  const fixedPower = [];
+
+  (fixedRows || []).forEach(row => {
+    const line = buildFixedPreviewLine(row);
+    if (!line) return;
+
+    const category = row.property_category || "primary";
+    if (category === "primary") fixedPrimary.push(line);
+    if (category === "secondary") fixedSecondary.push(line);
+    if (category === "power") fixedPower.push(line);
+  });
+
+  const choiceLines = buildChoiceGroupPreviewLines(choiceGroups);
+  const randomLines = buildRandomAffixPreviewLines(baseItem);
+
+  return {
+    display_name: baseItem.display_name,
+    rarity: baseItem.rarity,
+    rarity_label: getPreviewBaseLabel(baseItem),
+    item_type: baseItem.item_type,
+    equip_slot: baseItem.equip_slot,
+    tooltip_archetype: baseItem.tooltip_archetype,
+    header_lines,
+    primary_lines: [...fixedPrimary, ...choiceLines.primary, ...randomLines.primary],
+    secondary_lines: [...fixedSecondary, ...choiceLines.secondary, ...randomLines.secondary],
+    power_lines: [...fixedPower, ...choiceLines.power],
+    footer_lines: buildFooterPreviewLines(baseItem)
+  };
+}
+
+function updateCreatePreview() {
+  const displayName = $("create_display_name").value.trim();
+  const itemType = $("create_item_type").value;
+
+  if (!displayName && !itemType) {
+    renderTooltipPreview("createPreviewContent", null);
+    return;
+  }
+
+  const baseItem = collectBaseItemFromCreateForm(
+    $("create_item_code_preview").value.trim() || "preview_item"
+  );
+
+  const fixedRows = collectFixedProperties("createFixedList");
+  const choiceGroups = collectChoiceGroups("createChoiceGroupList");
+
+  const previewData = buildPreviewData(baseItem, fixedRows, choiceGroups);
+  renderTooltipPreview("createPreviewContent", previewData);
+}
+
+function updateEditPreview() {
+  if (!$("editForm") || $("editForm").classList.contains("hidden")) {
+    renderTooltipPreview("editPreviewContent", null);
+    return;
+  }
+
+  const baseItem = collectBaseItemFromEditForm();
+  const fixedRows = collectFixedProperties("editFixedList");
+  const choiceGroups = collectChoiceGroups("editChoiceGroupList");
+
+  const previewData = buildPreviewData(baseItem, fixedRows, choiceGroups);
+  renderTooltipPreview("editPreviewContent", previewData);
+}
+
 function makeDefaultInternalName(itemCode) {
   return itemCode || "";
+}
+
+function wirePreviewEvents() {
+  const createIds = [
+    "create_display_name",
+    "create_rarity",
+    "create_item_type",
+    "create_tooltip_archetype",
+    "create_level_requirement",
+    "create_binding_mode",
+    "create_source_type",
+    "create_crafted_tier",
+    "create_damage_min",
+    "create_damage_max",
+    "create_attacks_per_second",
+    "create_armor_base",
+    "create_block_base",
+    "create_min_sockets",
+    "create_max_sockets",
+    "create_rarity_label",
+    "create_random_primary_min",
+    "create_random_primary_max",
+    "create_random_secondary_min",
+    "create_random_secondary_max",
+    "create_item_set_code",
+    "create_appearance_code",
+    "create_description",
+    "create_flavor_text"
+  ];
+
+  createIds.forEach(id => {
+    const el = $(id);
+    if (!el) return;
+    el.addEventListener("input", updateCreatePreview);
+    el.addEventListener("change", updateCreatePreview);
+  });
+
+  [
+    "create_is_unique_equipped",
+    "create_can_have_gems",
+    "create_can_roll_primary_affixes",
+    "create_can_roll_secondary_affixes"
+  ].forEach(id => {
+    const el = $(id);
+    if (!el) return;
+    el.addEventListener("change", updateCreatePreview);
+  });
+
+  const editIds = [
+    "edit_display_name",
+    "edit_rarity",
+    "edit_item_type",
+    "edit_item_code",
+    "edit_internal_name",
+    "edit_tooltip_archetype",
+    "edit_level_requirement",
+    "edit_binding_mode",
+    "edit_source_type",
+    "edit_crafted_tier",
+    "edit_damage_min",
+    "edit_damage_max",
+    "edit_attacks_per_second",
+    "edit_armor_base",
+    "edit_block_base",
+    "edit_min_sockets",
+    "edit_max_sockets",
+    "edit_rarity_label",
+    "edit_random_primary_min",
+    "edit_random_primary_max",
+    "edit_random_secondary_min",
+    "edit_random_secondary_max",
+    "edit_item_set_code",
+    "edit_appearance_code",
+    "edit_description",
+    "edit_flavor_text"
+  ];
+
+  editIds.forEach(id => {
+    const el = $(id);
+    if (!el) return;
+    el.addEventListener("input", updateEditPreview);
+    el.addEventListener("change", updateEditPreview);
+  });
+
+  [
+    "edit_is_unique_equipped",
+    "edit_can_have_gems",
+    "edit_can_roll_primary_affixes",
+    "edit_can_roll_secondary_affixes"
+  ].forEach(id => {
+    const el = $(id);
+    if (!el) return;
+    el.addEventListener("change", updateEditPreview);
+  });
+  
 }
 
 function debounce(fn, wait = 250) {
@@ -678,11 +1069,19 @@ function selectOptions(values, selected) {
 
 function bindRepeaterEvents(root) {
   root.querySelectorAll(".btn-remove-fixed").forEach(btn => {
-    btn.onclick = () => btn.closest(".fixed-property").remove();
+    btn.onclick = () => {
+      btn.closest(".fixed-property").remove();
+      updateCreatePreview();
+      updateEditPreview();
+    };
   });
 
   root.querySelectorAll(".btn-remove-group").forEach(btn => {
-    btn.onclick = () => btn.closest(".choice-group").remove();
+    btn.onclick = () => {
+      btn.closest(".choice-group").remove();
+      updateCreatePreview();
+      updateEditPreview();
+    };
   });
 
   root.querySelectorAll(".btn-add-option").forEach(btn => {
@@ -690,11 +1089,33 @@ function bindRepeaterEvents(root) {
       const container = btn.closest(".choice-group").querySelector(".choice-options");
       container.insertAdjacentHTML("beforeend", createChoiceOptionHtml("x"));
       bindRepeaterEvents(container);
+      wirePreviewEventsInside(container);
+      updateCreatePreview();
+      updateEditPreview();
     };
   });
 
   root.querySelectorAll(".btn-remove-option").forEach(btn => {
-    btn.onclick = () => btn.closest(".choice-option").remove();
+    btn.onclick = () => {
+      btn.closest(".choice-option").remove();
+      updateCreatePreview();
+      updateEditPreview();
+    };
+  });
+
+  wirePreviewEventsInside(root);
+}
+
+function wirePreviewEventsInside(root) {
+  root.querySelectorAll("input, select, textarea").forEach(el => {
+    el.oninput = () => {
+      updateCreatePreview();
+      updateEditPreview();
+    };
+    el.onchange = () => {
+      updateCreatePreview();
+      updateEditPreview();
+    };
   });
 }
 
@@ -920,11 +1341,16 @@ async function refreshCreateAutoFields() {
     $("create_item_code_preview").value = "";
     $("create_internal_name").value = "";
 
-    if (!displayName || !itemType) return;
+    if (!displayName || !itemType) {
+      updateCreatePreview();
+      return;
+    }
 
     const code = await generateUniqueItemCode(displayName, itemType);
     $("create_item_code_preview").value = code;
     $("create_internal_name").value = code;
+
+    updateCreatePreview();
   } catch (err) {
     showStatus(`Auto item_code konnte nicht berechnet werden:\n${err.message}`, "error");
   }
@@ -934,6 +1360,7 @@ function refreshEditDerivedFields() {
   const itemType = $("edit_item_type").value;
   const mapping = state.itemTypeMap.get(itemType);
   $("edit_equip_slot").value = mapping?.equip_slot || "";
+  updateEditPreview();
 }
 
 // ---------- save / update / delete ----------
@@ -1250,6 +1677,8 @@ function resetCreateForm() {
   $("create_equip_slot").value = "";
   $("createFixedList").innerHTML = "";
   $("createChoiceGroupList").innerHTML = "";
+
+  renderTooltipPreview("createPreviewContent", null);
 }
 
 function fillEditForm(payload) {
@@ -1302,6 +1731,7 @@ function fillEditForm(payload) {
 
   bindRepeaterEvents($("editFixedList"));
   bindRepeaterEvents($("editChoiceGroupList"));
+  updateEditPreview();
 }
 
 // ---------- event wiring ----------
@@ -1360,6 +1790,7 @@ function wireUi() {
   $("btnReloadList").addEventListener("click", loadItemsForList);
 
   $("edit_search").addEventListener("input", debounce(renderEditItemList, 150));
+  wirePreviewEvents();
 }
 
 // ---------- app init ----------
