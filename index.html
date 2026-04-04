@@ -6,120 +6,153 @@
   <title>Item Admin</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --panel-2: #0b1220;
+      --border: #334155;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --accent: #2563eb;
+      --danger: #dc2626;
+      --success: #10b981;
+    }
+
+    * { box-sizing: border-box; }
+
     body {
-      font-family: Arial, sans-serif;
       margin: 0;
-      background: #0f172a;
-      color: #e5e7eb;
+      font-family: Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
     }
 
     .wrap {
-      max-width: 1200px;
+      max-width: 1380px;
       margin: 0 auto;
       padding: 20px;
     }
 
-    h1, h2, h3 {
-      margin-top: 0;
-    }
+    h1, h2, h3, h4 { margin-top: 0; }
+
+    .small { font-size: 12px; color: var(--muted); }
+    .muted { color: var(--muted); }
+    .success { color: #34d399; white-space: pre-wrap; }
+    .error { color: #f87171; white-space: pre-wrap; }
+    .msg { white-space: pre-wrap; margin-top: 12px; }
 
     .card {
-      background: #111827;
-      border: 1px solid #374151;
+      background: var(--panel);
+      border: 1px solid var(--border);
       border-radius: 12px;
       padding: 16px;
       margin-bottom: 16px;
     }
 
-    .row {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-
-    .row > * {
-      flex: 1;
-      min-width: 220px;
-    }
-
-    label {
-      display: block;
-      margin-bottom: 6px;
-      font-size: 14px;
-      color: #cbd5e1;
-    }
-
-    input, select, textarea, button {
-      width: 100%;
-      box-sizing: border-box;
-      padding: 10px 12px;
-      border-radius: 8px;
-      border: 1px solid #475569;
-      background: #0b1220;
-      color: #f8fafc;
-    }
-
-    textarea {
-      min-height: 90px;
-      resize: vertical;
-    }
-
-    button {
-      cursor: pointer;
-      background: #2563eb;
-      border: none;
-      font-weight: bold;
-    }
-
-    button.secondary {
-      background: #334155;
-    }
-
     .tabs {
       display: flex;
-      gap: 8px;
       flex-wrap: wrap;
+      gap: 8px;
       margin-bottom: 16px;
     }
 
     .tab-btn {
       width: auto;
       padding: 10px 14px;
+      border-radius: 8px;
+      border: none;
       background: #1e293b;
+      color: white;
+      cursor: pointer;
+      font-weight: 700;
     }
 
     .tab-btn.active {
-      background: #2563eb;
+      background: var(--accent);
     }
 
-    .tab-panel {
-      display: none;
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+    .hidden { display: none; }
+
+    .toolbar, .row, .inline-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
     }
 
-    .tab-panel.active {
+    .toolbar > *, .row > * {
+      flex: 1;
+      min-width: 220px;
+    }
+
+    .inline-actions > button {
+      width: auto;
+      min-width: 150px;
+    }
+
+    .inline-actions > .spacer {
+      flex: 1;
+      min-width: 40px;
+    }
+
+    label {
       display: block;
+      margin-bottom: 6px;
+      color: #cbd5e1;
+      font-size: 14px;
+      font-weight: 700;
     }
 
-    .hidden {
-      display: none;
+    input, select, textarea, button {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid #475569;
+      background: var(--panel-2);
+      color: white;
+      font: inherit;
     }
 
-    .msg {
+    textarea {
+      min-height: 84px;
+      resize: vertical;
+    }
+
+    button {
+      cursor: pointer;
+      border: none;
+      background: var(--accent);
+      font-weight: 700;
+    }
+
+    button.secondary { background: #475569; }
+    button.danger { background: var(--danger); }
+
+    .section-box {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      margin-top: 14px;
+      background: rgba(255,255,255,0.02);
+    }
+
+    .section-title {
+      margin: 0 0 10px 0;
+      font-size: 16px;
+      color: #dbeafe;
+    }
+
+    .stack > div { margin-bottom: 12px; }
+
+    .preview {
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #020617;
       white-space: pre-wrap;
       font-size: 14px;
-    }
-
-    .success {
-      color: #34d399;
-    }
-
-    .error {
-      color: #f87171;
-    }
-
-    .muted {
-      color: #94a3b8;
-      font-size: 14px;
+      overflow: auto;
     }
 
     table {
@@ -130,52 +163,62 @@
     }
 
     th, td {
-      border: 1px solid #334155;
+      border: 1px solid var(--border);
       padding: 8px;
       text-align: left;
       vertical-align: top;
     }
 
-    th {
-      background: #1e293b;
+    th { background: #1e293b; }
+    tr:hover td { background: rgba(255,255,255,0.03); }
+
+    .item-row-btn {
+      text-align: left;
+      background: transparent;
+      border: none;
+      padding: 0;
+      color: #93c5fd;
+      cursor: pointer;
+      font-weight: 700;
     }
 
-    tr:hover td {
-      background: #0b1220;
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
     }
 
-    .toolbar {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      align-items: end;
+    .three-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
     }
 
-    .toolbar > * {
-      min-width: 180px;
-      flex: 1;
-    }
-
-    .small {
-      font-size: 12px;
-      color: #94a3b8;
-    }
-
-    .codebox {
-      background: #020617;
-      border: 1px solid #334155;
-      border-radius: 8px;
+    .group-box {
+      border: 1px dashed #475569;
+      border-radius: 10px;
       padding: 12px;
-      white-space: pre-wrap;
-      overflow: auto;
+      margin-top: 12px;
+      background: rgba(255,255,255,0.015);
+    }
+
+    .subtle {
+      color: #bfdbfe;
       font-size: 13px;
+      margin-bottom: 8px;
+    }
+
+    @media (max-width: 980px) {
+      .two-col, .three-col {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>Item Admin</h1>
-    <p class="muted">GitHub Pages + Supabase Admin für Items</p>
+    <p class="muted">GitHub Pages + Supabase Admin für Items, Fixed Properties und Choice Groups</p>
 
     <div class="card">
       <h2>Supabase</h2>
@@ -189,9 +232,7 @@
           <input id="supabaseAnonKey" placeholder="eyJhbGciOi..." />
         </div>
       </div>
-      <div class="small" style="margin-top:8px;">
-        Du kannst diese Werte später auch fest in app.js eintragen.
-      </div>
+      <div class="small" style="margin-top: 8px;">Diese Werte kannst du später direkt in <code>app.js</code> fest eintragen.</div>
     </div>
 
     <div id="loginCard" class="card">
@@ -206,22 +247,22 @@
           <input id="loginPassword" type="password" placeholder="Passwort" />
         </div>
       </div>
-      <div class="row" style="margin-top:12px;">
-        <div><button id="loginBtn">Einloggen</button></div>
-        <div><button id="checkSessionBtn" class="secondary">Session prüfen</button></div>
+      <div class="inline-actions" style="margin-top: 12px;">
+        <button id="loginBtn" type="button">Einloggen</button>
+        <button id="checkSessionBtn" class="secondary" type="button">Session prüfen</button>
       </div>
-      <div id="authMsg" class="msg muted" style="margin-top:12px;"></div>
+      <div id="authMsg" class="msg muted"></div>
     </div>
 
     <div id="appShell" class="hidden">
       <div class="card">
         <div class="row">
           <div>
-            <h2 style="margin-bottom:6px;">Adminbereich</h2>
+            <h2 style="margin-bottom: 6px;">Adminbereich</h2>
             <div id="userInfo" class="muted"></div>
           </div>
-          <div style="max-width:200px;">
-            <button id="logoutBtn" class="secondary">Logout</button>
+          <div style="max-width: 200px;">
+            <button id="logoutBtn" class="secondary" type="button">Logout</button>
           </div>
         </div>
       </div>
@@ -230,7 +271,7 @@
         <button class="tab-btn active" data-tab="tab-list">Items anzeigen</button>
         <button class="tab-btn" data-tab="tab-create">Item anlegen</button>
         <button class="tab-btn" data-tab="tab-edit">Item bearbeiten</button>
-        <button class="tab-btn" data-tab="tab-help">Hinweise</button>
+        <button class="tab-btn" data-tab="tab-help">Setup</button>
       </div>
 
       <div id="tab-list" class="tab-panel active card">
@@ -239,6 +280,10 @@
           <div>
             <label for="filterItemCode">item_code</label>
             <input id="filterItemCode" placeholder="z. B. sword_" />
+          </div>
+          <div>
+            <label for="filterDisplayName">display_name</label>
+            <input id="filterDisplayName" placeholder="z. B. Verhängnis" />
           </div>
           <div>
             <label for="filterRarity">rarity</label>
@@ -252,13 +297,15 @@
           </div>
           <div>
             <label for="filterItemType">item_type</label>
-            <input id="filterItemType" placeholder="z. B. sword_1h" />
+            <input id="filterItemType" placeholder="z. B. shield" />
           </div>
-          <div style="max-width:180px;">
-            <button id="refreshItemsBtn">Laden</button>
+          <div style="max-width: 170px;">
+            <label>&nbsp;</label>
+            <button id="refreshItemsBtn" type="button">Laden</button>
           </div>
         </div>
-        <div id="listMsg" class="msg muted" style="margin-top:12px;"></div>
+        <div id="listMsg" class="msg muted"></div>
+
         <div style="overflow:auto;">
           <table id="itemsTable">
             <thead>
@@ -280,219 +327,355 @@
       <div id="tab-create" class="tab-panel card">
         <h2>Item anlegen</h2>
         <form id="createItemForm">
-          <div class="row">
-            <div><label>item_code *</label><input name="item_code" required /></div>
-            <div><label>display_name *</label><input name="display_name" required /></div>
-            <div>
-              <label>rarity</label>
-              <select name="rarity">
-                <option value="">leer</option>
-                <option value="normal">normal</option>
-                <option value="magic">magic</option>
-                <option value="rare">rare</option>
-                <option value="legendary">legendary</option>
-              </select>
-            </div>
-            <div>
-              <label>item_type</label>
-              <select name="item_type">
-                <option value="">leer</option>
-                <option value="sword_1h">sword_1h</option>
-                <option value="axe_1h">axe_1h</option>
-                <option value="helmet">helmet</option>
-                <option value="amulet">amulet</option>
-                <option value="ring">ring</option>
-                <option value="shield">shield</option>
-                <option value="crusader_shield">crusader_shield</option>
-                <option value="orb">orb</option>
-                <option value="quiver">quiver</option>
-                <option value="book">book</option>
-                <option value="belt">belt</option>
-                <option value="boots">boots</option>
-                <option value="gloves">gloves</option>
-                <option value="pants">pants</option>
-                <option value="bracer">bracer</option>
-                <option value="chest_armor">chest_armor</option>
-                <option value="cloak">cloak</option>
-                <option value="shoulder_armor">shoulder_armor</option>
-                <option value="artifact">artifact</option>
-              </select>
-            </div>
-            <div>
-              <label>equip_slot</label>
-              <select name="equip_slot">
-                <option value="">leer</option>
-                <option value="weapon_main">weapon_main</option>
-                <option value="weapon_off">weapon_off</option>
-                <option value="head">head</option>
-                <option value="shoulders">shoulders</option>
-                <option value="chest">chest</option>
-                <option value="sleeve">sleeve</option>
-                <option value="hand">hand</option>
-                <option value="belt">belt</option>
-                <option value="legs">legs</option>
-                <option value="feet">feet</option>
-                <option value="amulet">amulet</option>
-                <option value="ring_left">ring_left</option>
-                <option value="ring_right">ring_right</option>
-                <option value="backpack">backpack</option>
-                <option value="artifact">artifact</option>
-              </select>
-            </div>
-            <div>
-              <label>tooltip_archetype</label>
-              <select name="tooltip_archetype">
-                <option value="">leer</option>
-                <option value="weapon">weapon</option>
-                <option value="armor">armor</option>
-                <option value="jewelry">jewelry</option>
-                <option value="offhand">offhand</option>
-                <option value="artifact">artifact</option>
-                <option value="consumable">consumable</option>
-                <option value="material">material</option>
-                <option value="quest">quest</option>
-              </select>
-            </div>
-            <div>
-              <label>binding_mode</label>
-              <select name="binding_mode">
-                <option value="">leer</option>
-                <option value="tradable">tradable</option>
-                <option value="account_bound">account_bound</option>
-                <option value="bind_on_equip">bind_on_equip</option>
-                <option value="bind_on_pickup">bind_on_pickup</option>
-              </select>
-            </div>
-            <div><label>rarity_label</label><input name="rarity_label" /></div>
-            <div><label>level_requirement</label><input name="level_requirement" type="number" min="1" /></div>
-            <div><label>damage_min</label><input name="damage_min" type="number" step="0.01" /></div>
-            <div><label>damage_max</label><input name="damage_max" type="number" step="0.01" /></div>
-            <div><label>attacks_per_second</label><input name="attacks_per_second" type="number" step="0.01" /></div>
-            <div><label>armor_min</label><input name="armor_min" type="number" step="0.01" /></div>
-            <div><label>armor_max</label><input name="armor_max" type="number" step="0.01" /></div>
-            <div><label>random_primary_min</label><input name="random_primary_min" type="number" min="0" /></div>
-            <div><label>random_primary_max</label><input name="random_primary_max" type="number" min="0" /></div>
-            <div><label>random_secondary_min</label><input name="random_secondary_min" type="number" min="0" /></div>
-            <div><label>random_secondary_max</label><input name="random_secondary_max" type="number" min="0" /></div>
-            <div><label>crafted_tier</label><input name="crafted_tier" type="number" min="1" /></div>
-            <div><label>source_type</label><input name="source_type" /></div>
-            <div><label>item_set_code</label><input name="item_set_code" /></div>
-            <div>
-              <label>is_unique_equipped</label>
-              <select name="is_unique_equipped">
-                <option value="">leer</option>
-                <option value="true">true</option>
-                <option value="false">false</option>
-              </select>
+          <div class="section-box">
+            <h3 class="section-title">Basis</h3>
+
+            <div class="stack">
+              <div>
+                <label for="create_display_name">display_name</label>
+                <input id="create_display_name" name="display_name" placeholder="z. B. Die Verwehrung" required />
+              </div>
+
+              <div>
+                <label for="create_item_code_preview">item_code (automatisch)</label>
+                <input id="create_item_code_preview" type="text" readonly />
+              </div>
+
+              <div>
+                <label for="create_rarity">rarity</label>
+                <select id="create_rarity" name="rarity">
+                  <option value="">leer</option>
+                  <option value="normal">normal</option>
+                  <option value="magic">magic</option>
+                  <option value="rare">rare</option>
+                  <option value="legendary">legendary</option>
+                </select>
+              </div>
+
+              <div>
+                <label for="create_item_type">item_type</label>
+                <select id="create_item_type" name="item_type">
+                  <option value="">leer</option>
+                  <option value="shield">shield</option>
+                  <option value="crusader_shield">crusader_shield</option>
+                  <option value="sword_1h">sword_1h</option>
+                  <option value="axe_1h">axe_1h</option>
+                  <option value="helmet">helmet</option>
+                  <option value="amulet">amulet</option>
+                  <option value="ring">ring</option>
+                  <option value="orb">orb</option>
+                  <option value="quiver">quiver</option>
+                  <option value="book">book</option>
+                  <option value="belt">belt</option>
+                  <option value="boots">boots</option>
+                  <option value="gloves">gloves</option>
+                  <option value="pants">pants</option>
+                  <option value="bracer">bracer</option>
+                  <option value="chest_armor">chest_armor</option>
+                  <option value="cloak">cloak</option>
+                  <option value="shoulder_armor">shoulder_armor</option>
+                  <option value="artifact">artifact</option>
+                </select>
+              </div>
+
+              <div>
+                <label for="create_equip_slot_preview">equip_slot (automatisch)</label>
+                <input id="create_equip_slot_preview" type="text" readonly />
+              </div>
+
+              <div>
+                <label for="create_tooltip_archetype_preview">tooltip_archetype (automatisch)</label>
+                <input id="create_tooltip_archetype_preview" type="text" readonly />
+              </div>
+
+              <div class="two-col">
+                <div>
+                  <label for="create_damage_min">damage_min</label>
+                  <input id="create_damage_min" name="damage_min" type="number" step="0.01" />
+                </div>
+                <div>
+                  <label for="create_damage_max">damage_max</label>
+                  <input id="create_damage_max" name="damage_max" type="number" step="0.01" />
+                </div>
+              </div>
+
+              <div>
+                <label for="create_attacks_per_second">attacks_per_second</label>
+                <input id="create_attacks_per_second" name="attacks_per_second" type="number" step="0.01" />
+              </div>
+
+              <div class="two-col">
+                <div>
+                  <label for="create_armor_min">armor_min</label>
+                  <input id="create_armor_min" name="armor_min" type="number" step="0.01" placeholder="z. B. 320" />
+                </div>
+                <div>
+                  <label for="create_armor_max">armor_max</label>
+                  <input id="create_armor_max" name="armor_max" type="number" step="0.01" placeholder="z. B. 383" />
+                </div>
+              </div>
+
+              <div>
+                <label>Berechneter Header-Wert</label>
+                <div id="create_header_value_preview" class="preview">Noch keine Werte</div>
+              </div>
+
+              <div>
+                <label for="create_level_requirement">Item Level / level_requirement</label>
+                <input id="create_level_requirement" name="level_requirement" type="number" min="1" value="1" />
+              </div>
+
+              <div>
+                <label for="create_binding_mode">binding_mode</label>
+                <select id="create_binding_mode" name="binding_mode">
+                  <option value="tradable" selected>tradable</option>
+                  <option value="account_bound">account_bound</option>
+                  <option value="bind_on_equip">bind_on_equip</option>
+                  <option value="bind_on_pickup">bind_on_pickup</option>
+                </select>
+              </div>
             </div>
           </div>
 
-          <div style="margin-top:12px;">
-            <label>description</label>
-            <textarea name="description"></textarea>
+          <div class="section-box">
+            <h3 class="section-title">Feste Primärwerte</h3>
+            <div id="fixedPrimaryRows"></div>
+            <div class="inline-actions" style="margin-top: 12px;">
+              <button id="addFixedPrimaryBtn" type="button" class="secondary">Festen Primärwert hinzufügen</button>
+            </div>
           </div>
 
-          <div style="margin-top:12px;">
-            <label>extra_data_json</label>
-            <textarea name="extra_data_json" placeholder='{"example":true}'></textarea>
+          <div class="section-box">
+            <h3 class="section-title">Macht</h3>
+            <div class="stack">
+              <div>
+                <label for="power_description_template">Beschreibung mit Platzhaltern</label>
+                <textarea id="power_description_template" placeholder="Jeder von Eurem 'Schwungangriff' getroffene Gegner erhöht den Schaden Eures nächsten 'Schwungangriffs' um {value}%. Bis zu 5-mal stapelbar. (Nur Kreuzritter)"></textarea>
+              </div>
+              <div class="two-col">
+                <div>
+                  <label for="power_value_min">value_min</label>
+                  <input id="power_value_min" type="number" step="0.01" />
+                </div>
+                <div>
+                  <label for="power_value_max">value_max</label>
+                  <input id="power_value_max" type="number" step="0.01" />
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div class="row" style="margin-top:12px;">
-            <div><button type="submit">Item speichern</button></div>
-            <div><button type="button" id="resetCreateBtn" class="secondary">Leeren</button></div>
+          <div class="section-box">
+            <h3 class="section-title">Primär MainStat – automatisch als Choice Group</h3>
+            <div class="small">Es werden automatisch 3 Optionen geschrieben: Stärke, Geschicklichkeit, Intelligenz.</div>
+            <div class="two-col" style="margin-top: 12px;">
+              <div>
+                <label for="mainstat_value_min">value_min</label>
+                <input id="mainstat_value_min" type="number" step="0.01" value="626" />
+              </div>
+              <div>
+                <label for="mainstat_value_max">value_max</label>
+                <input id="mainstat_value_max" type="number" step="0.01" value="750" />
+              </div>
+            </div>
+          </div>
+
+          <div class="section-box">
+            <h3 class="section-title">Zufällige magische Eigenschaften</h3>
+            <div class="two-col">
+              <div>
+                <label for="create_random_primary_min">random_primary_min</label>
+                <input id="create_random_primary_min" name="random_primary_min" type="number" min="0" value="0" />
+              </div>
+              <div>
+                <label for="create_random_primary_max">random_primary_max</label>
+                <input id="create_random_primary_max" name="random_primary_max" type="number" min="0" value="0" />
+              </div>
+              <div>
+                <label for="create_random_secondary_min">random_secondary_min</label>
+                <input id="create_random_secondary_min" name="random_secondary_min" type="number" min="0" value="0" />
+              </div>
+              <div>
+                <label for="create_random_secondary_max">random_secondary_max</label>
+                <input id="create_random_secondary_max" name="random_secondary_max" type="number" min="0" value="0" />
+              </div>
+            </div>
+          </div>
+
+          <div class="section-box">
+            <h3 class="section-title">Optionale Zusatzfelder</h3>
+            <div class="stack">
+              <div>
+                <label for="create_source_type">source_type</label>
+                <input id="create_source_type" name="source_type" placeholder="z. B. crafted / drop / quest" />
+              </div>
+              <div>
+                <label for="create_crafted_tier">crafted_tier</label>
+                <input id="create_crafted_tier" name="crafted_tier" type="number" min="1" />
+              </div>
+              <div>
+                <label for="create_item_set_code">item_set_code</label>
+                <input id="create_item_set_code" name="item_set_code" />
+              </div>
+              <div>
+                <label for="create_is_unique_equipped">is_unique_equipped</label>
+                <select id="create_is_unique_equipped" name="is_unique_equipped">
+                  <option value="">leer</option>
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+              </div>
+              <div>
+                <label for="create_description">description</label>
+                <textarea id="create_description" name="description"></textarea>
+              </div>
+              <div>
+                <label for="create_extra_data_json">extra_data_json</label>
+                <textarea id="create_extra_data_json" name="extra_data_json" placeholder='{"example":true}'></textarea>
+              </div>
+            </div>
+          </div>
+
+          <div class="inline-actions" style="margin-top: 16px;">
+            <button type="submit">Item + Properties + Choice Group speichern</button>
+            <button type="button" id="resetCreateBtn" class="secondary">Formular leeren</button>
           </div>
         </form>
-        <div id="createMsg" class="msg muted" style="margin-top:12px;"></div>
+        <div id="createMsg" class="msg muted"></div>
       </div>
 
       <div id="tab-edit" class="tab-panel card">
         <h2>Item bearbeiten</h2>
-        <div class="row">
+        <div class="toolbar">
           <div>
             <label for="editLookupItemCode">item_code suchen</label>
             <input id="editLookupItemCode" placeholder="z. B. sword_doombringer" />
           </div>
-          <div style="max-width:180px;">
+          <div style="max-width: 180px;">
             <label>&nbsp;</label>
-            <button id="loadItemForEditBtn">Item laden</button>
+            <button id="loadItemForEditBtn" type="button">Item laden</button>
           </div>
         </div>
 
-        <form id="editItemForm" style="margin-top:16px;">
+        <form id="editItemForm" style="margin-top: 16px;">
           <input type="hidden" name="id" />
-          <div class="row">
-            <div><label>item_code</label><input name="item_code" /></div>
-            <div><label>display_name</label><input name="display_name" /></div>
-            <div>
-              <label>rarity</label>
-              <select name="rarity">
-                <option value="">leer</option>
-                <option value="normal">normal</option>
-                <option value="magic">magic</option>
-                <option value="rare">rare</option>
-                <option value="legendary">legendary</option>
-              </select>
-            </div>
-            <div><label>item_type</label><input name="item_type" /></div>
-            <div><label>equip_slot</label><input name="equip_slot" /></div>
-            <div><label>tooltip_archetype</label><input name="tooltip_archetype" /></div>
-            <div><label>binding_mode</label><input name="binding_mode" /></div>
-            <div><label>rarity_label</label><input name="rarity_label" /></div>
-            <div><label>level_requirement</label><input name="level_requirement" type="number" /></div>
-            <div><label>damage_min</label><input name="damage_min" type="number" step="0.01" /></div>
-            <div><label>damage_max</label><input name="damage_max" type="number" step="0.01" /></div>
-            <div><label>attacks_per_second</label><input name="attacks_per_second" type="number" step="0.01" /></div>
-            <div><label>armor_min</label><input name="armor_min" type="number" step="0.01" /></div>
-            <div><label>armor_max</label><input name="armor_max" type="number" step="0.01" /></div>
-            <div><label>random_primary_min</label><input name="random_primary_min" type="number" /></div>
-            <div><label>random_primary_max</label><input name="random_primary_max" type="number" /></div>
-            <div><label>random_secondary_min</label><input name="random_secondary_min" type="number" /></div>
-            <div><label>random_secondary_max</label><input name="random_secondary_max" type="number" /></div>
-            <div><label>crafted_tier</label><input name="crafted_tier" type="number" /></div>
-            <div><label>source_type</label><input name="source_type" /></div>
-            <div><label>item_set_code</label><input name="item_set_code" /></div>
-            <div>
-              <label>is_unique_equipped</label>
-              <select name="is_unique_equipped">
-                <option value="">leer</option>
-                <option value="true">true</option>
-                <option value="false">false</option>
-              </select>
+
+          <div class="section-box">
+            <h3 class="section-title">Basis</h3>
+            <div class="row">
+              <div><label>item_code</label><input name="item_code" /></div>
+              <div><label>display_name</label><input name="display_name" /></div>
+              <div>
+                <label>rarity</label>
+                <select name="rarity">
+                  <option value="">leer</option>
+                  <option value="normal">normal</option>
+                  <option value="magic">magic</option>
+                  <option value="rare">rare</option>
+                  <option value="legendary">legendary</option>
+                </select>
+              </div>
+              <div><label>item_type</label><input name="item_type" /></div>
+              <div><label>equip_slot</label><input name="equip_slot" /></div>
+              <div><label>tooltip_archetype</label><input name="tooltip_archetype" /></div>
+              <div><label>binding_mode</label><input name="binding_mode" /></div>
+              <div><label>level_requirement</label><input name="level_requirement" type="number" /></div>
+              <div><label>damage_min</label><input name="damage_min" type="number" step="0.01" /></div>
+              <div><label>damage_max</label><input name="damage_max" type="number" step="0.01" /></div>
+              <div><label>attacks_per_second</label><input name="attacks_per_second" type="number" step="0.01" /></div>
+              <div><label>armor_min</label><input name="armor_min" type="number" step="0.01" /></div>
+              <div><label>armor_max</label><input name="armor_max" type="number" step="0.01" /></div>
+              <div><label>random_primary_min</label><input name="random_primary_min" type="number" /></div>
+              <div><label>random_primary_max</label><input name="random_primary_max" type="number" /></div>
+              <div><label>random_secondary_min</label><input name="random_secondary_min" type="number" /></div>
+              <div><label>random_secondary_max</label><input name="random_secondary_max" type="number" /></div>
+              <div><label>crafted_tier</label><input name="crafted_tier" type="number" /></div>
+              <div><label>source_type</label><input name="source_type" /></div>
+              <div><label>item_set_code</label><input name="item_set_code" /></div>
+              <div>
+                <label>is_unique_equipped</label>
+                <select name="is_unique_equipped">
+                  <option value="">leer</option>
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+              </div>
             </div>
           </div>
 
-          <div style="margin-top:12px;">
-            <label>description</label>
+          <div class="section-box">
+            <h3 class="section-title">description</h3>
             <textarea name="description"></textarea>
           </div>
 
-          <div style="margin-top:12px;">
-            <label>extra_data_json</label>
+          <div class="section-box">
+            <h3 class="section-title">extra_data_json</h3>
             <textarea name="extra_data_json"></textarea>
           </div>
 
-          <div class="row" style="margin-top:12px;">
-            <div><button type="submit">Änderungen speichern</button></div>
+          <div class="section-box">
+            <h3 class="section-title">item_fixed_properties</h3>
+            <div id="editFixedRows"></div>
+            <div class="inline-actions" style="margin-top: 12px;">
+              <button id="addEditFixedBtn" type="button" class="secondary">Fixed Property hinzufügen</button>
+            </div>
+          </div>
+
+          <div class="section-box">
+            <h3 class="section-title">item_choice_groups + item_choice_group_options</h3>
+            <div id="editChoiceGroupRows"></div>
+            <div class="inline-actions" style="margin-top: 12px;">
+              <button id="addEditChoiceGroupBtn" type="button" class="secondary">Choice Group hinzufügen</button>
+            </div>
+          </div>
+
+          <div class="inline-actions" style="margin-top: 16px;">
+            <button type="submit">Alles speichern</button>
+            <button type="button" id="deleteItemBtn" class="danger">Item inkl. Properties löschen</button>
           </div>
         </form>
 
-        <div id="editMsg" class="msg muted" style="margin-top:12px;"></div>
+        <div id="editMsg" class="msg muted"></div>
       </div>
 
       <div id="tab-help" class="tab-panel card">
-        <h2>Was du noch machen solltest</h2>
-        <div class="codebox">
-1. GitHub Pages aktivieren
-2. Supabase URL + Anon Key eintragen
-3. RLS + Policies auf public.items setzen
-4. Einloggen
-5. Items anzeigen, anlegen, bearbeiten
+        <h2>Was du tun musst</h2>
+        <div class="preview">
+1. Diese zwei Dateien in dein GitHub-Repo legen:
+   - index.html
+   - app.js
 
-Später empfehlenswert:
-- extra Tabs für item_fixed_properties
-- extra Tabs für item_choice_groups
-- extra Tabs für item_choice_group_options
-- extra Tabs für affix_definition_item_types
+2. GitHub Pages aktivieren
+
+3. In Supabase RLS aktivieren für:
+   - public.items
+   - public.item_fixed_properties
+   - public.item_choice_groups
+   - public.item_choice_group_options
+
+4. Policies für authenticated auf:
+   - select
+   - insert
+   - update
+   - delete
+   setzen
+
+5. Mit deinem Supabase-Auth-Benutzer einloggen
+
+Diese Version kann:
+- Items anzeigen
+- per Klick laden
+- Item ändern
+- Item löschen
+- item_fixed_properties bearbeiten
+- item_choice_groups bearbeiten
+- item_choice_group_options bearbeiten
+- beim Anlegen automatisch
+  - items
+  - item_fixed_properties
+  - item_choice_groups
+  - item_choice_group_options
+  schreiben
         </div>
       </div>
     </div>
