@@ -17,6 +17,9 @@ const state = {
   currentEditItem: null
 };
 console.log("app.js geladen");
+console.log("Supabase Client:", supabaseClient);
+console.log("Supabase URL raw:", SUPABASE_URL);
+console.log("Anon Key Länge:", SUPABASE_ANON_KEY ? SUPABASE_ANON_KEY.length : 0);
 // ---------- helpers ----------
 function $(id) {
   return document.getElementById(id);
@@ -173,21 +176,48 @@ function isAllowedUser() {
 async function login() {
   console.log("Login geklickt");
   clearStatus();
+
   try {
     const email = $("login_email").value.trim();
     const password = $("login_password").value;
+
+    console.log("Email:", email);
+    console.log("SUPABASE_URL:", SUPABASE_URL);
+    console.log("ANON vorhanden:", !!SUPABASE_ANON_KEY);
 
     if (!email || !password) {
       showStatus("Bitte E-Mail und Passwort eingeben.", "error");
       return;
     }
 
-    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
-    if (error) throw error;
+    console.log("Vor signInWithPassword");
+
+    const result = await Promise.race([
+      supabaseClient.auth.signInWithPassword({
+        email,
+        password
+      }),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Login-Timeout nach 15 Sekunden")), 15000)
+      )
+    ]);
+
+    console.log("Nach signInWithPassword:", result);
+
+    const { data, error } = result;
+
+    if (error) {
+      console.error("Supabase Login Fehler:", error);
+      throw error;
+    }
+
+    console.log("Login data:", data);
 
     await initAppAfterAuth();
+
     showStatus("Login erfolgreich.", "ok");
   } catch (err) {
+    console.error("Login Catch Fehler:", err);
     showStatus(`Login fehlgeschlagen:\n${err.message}`, "error");
   }
 }
