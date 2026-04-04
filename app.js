@@ -8,16 +8,16 @@ const state = {
   session: null,
   user: null,
   profile: null,
+
   items: [],
-  equipSlots: [],
   equipSlotItemTypes: [],
   affixDefinitions: [],
   affixAllowedByType: new Map(),
   itemTypeToSlot: new Map(),
-  itemTypeEntries: [],
-  editCurrentItem: null,
-  editCurrentFixed: [],
-  editCurrentGroups: []
+  itemRarityRules: [],
+  rarityRuleMap: new Map(),
+
+  editCurrentItem: null
 };
 
 const ITEM_STRUCTURE = {
@@ -146,7 +146,7 @@ function clearStatus() {
   box.className = "status info hidden";
 }
 
-function debounce(fn, wait = 150) {
+function debounce(fn, wait = 180) {
   let t = null;
   return (...args) => {
     clearTimeout(t);
@@ -179,10 +179,74 @@ function slugify(input) {
     .replace(/^_+|_+$/g, "");
 }
 
-function titleCase(text) {
-  return String(text || "")
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, c => c.toUpperCase());
+function normalizeForSearch(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ß/g, "ss")
+    .replace(/ä/g, "a")
+    .replace(/ö/g, "o")
+    .replace(/ü/g, "u")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function levenshtein(a, b) {
+  a = normalizeForSearch(a);
+  b = normalizeForSearch(b);
+
+  const matrix = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
+  for (let i = 0; i <= a.length; i++) matrix[i][0] = i;
+  for (let j = 0; j <= b.length; j++) matrix[0][j] = j;
+
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost
+      );
+    }
+  }
+  return matrix[a.length][b.length];
+}
+
+function fuzzyScoreAffix(def, query) {
+  const q = normalizeForSearch(query);
+  if (!q) return 0;
+
+  const code = normalizeForSearch(def.affix_code || "");
+  const stat = normalizeForSearch(def.stat_name || "");
+  const desc = normalizeForSearch(def.description_template || "");
+
+  let score = 0;
+
+  if (code === q) score += 1000;
+  if (stat === q) score += 1200;
+  if (desc === q) score += 1100;
+
+  if (code.includes(q)) score += 450;
+  if (stat.includes(q)) score += 650;
+  if (desc.includes(q)) score += 550;
+
+  const qTokens = q.split(" ").filter(Boolean);
+  for (const token of qTokens) {
+    if (code.includes(token)) score += 100;
+    if (stat.includes(token)) score += 140;
+    if (desc.includes(token)) score += 130;
+  }
+
+  const statDistance = levenshtein(q, stat);
+  const codeDistance = levenshtein(q, code);
+  const descDistance = levenshtein(q, desc);
+
+  score += Math.max(0, 120 - statDistance * 10);
+  score += Math.max(0, 80 - codeDistance * 8);
+  score += Math.max(0, 70 - descDistance * 5);
+
+  return score;
 }
 
 function formatPreviewNumber(value, decimals = 0) {
@@ -294,9 +358,7 @@ async function generateUniqueItemCode(displayName, itemType, existingItemId = nu
       .select("id", { count: "exact", head: true })
       .eq("item_code", code);
 
-    if (existingItemId) {
-      query = query.neq("id", existingItemId);
-    }
+    if (existingItemId) query = query.neq("id", existingItemId);
 
     const { count, error } = await query;
     if (error) throw error;
@@ -305,7 +367,6 @@ async function generateUniqueItemCode(displayName, itemType, existingItemId = nu
     tries += 1;
     code = `${base}_${tries + 1}`;
   }
-
   return `${base}_${Date.now()}`;
 }
 
@@ -334,21 +395,30 @@ async function getSessionAndProfile() {
 async function loadReferenceData() {
   const [
     equipSlotItemTypesRes,
-    affixesRes
+    affixesRes,
+    rarityRulesRes
   ] = await Promise.all([
     supabaseClient.from("equip_slot_item_types").select("*").order("sort_order"),
-    supabaseClient.from("affix_definitions").select("*").eq("is_enabled", true).order("sort_order")
+    supabaseClient.from("affix_definitions").select("*").eq("is_enabled", true).order("sort_order"),
+    supabaseClient.from("item_rarity_rules").select("*")
   ]);
 
   if (equipSlotItemTypesRes.error) throw equipSlotItemTypesRes.error;
   if (affixesRes.error) throw affixesRes.error;
+  if (rarityRulesRes.error) throw rarityRulesRes.error;
 
   state.equipSlotItemTypes = equipSlotItemTypesRes.data || [];
   state.affixDefinitions = affixesRes.data || [];
+  state.itemRarityRules = rarityRulesRes.data || [];
 
   state.itemTypeToSlot = new Map();
   state.equipSlotItemTypes.forEach(row => {
     state.itemTypeToSlot.set(row.item_type, row.equip_slot);
+  });
+
+  state.rarityRuleMap = new Map();
+  state.itemRarityRules.forEach(rule => {
+    state.rarityRuleMap.set(rule.rarity, rule);
   });
 
   const { data: allowedRows, error: allowedErr } = await supabaseClient
@@ -440,20 +510,46 @@ function getSelectedItemType(prefix) {
   return $(`${prefix}_item_type`).value;
 }
 
-function getAffixesAllowedForCurrentItemType(itemType, category = null, search = "") {
+function getAllowedAffixesForItemType(itemType, category = null) {
   const allowedIds = state.affixAllowedByType.get(itemType) || new Set();
-  const q = search.trim().toLowerCase();
-
   return state.affixDefinitions.filter(def => {
     if (!allowedIds.has(def.id)) return false;
     if (category && def.affix_category !== category) return false;
-    if (!q) return true;
-    return (
-      String(def.affix_code || "").toLowerCase().includes(q) ||
-      String(def.stat_name || "").toLowerCase().includes(q) ||
-      String(def.description_template || "").toLowerCase().includes(q)
-    );
+    return true;
   });
+}
+
+function rankAffixesForItemType(itemType, category = null, search = "") {
+  return getAllowedAffixesForItemType(itemType, category)
+    .map(def => ({ ...def, _score: fuzzyScoreAffix(def, search) }))
+    .sort((a, b) => {
+      if (search.trim()) {
+        if (b._score !== a._score) return b._score - a._score;
+      }
+      if ((a.sort_order || 0) !== (b.sort_order || 0)) {
+        return (a.sort_order || 0) - (b.sort_order || 0);
+      }
+      return String(a.affix_code || "").localeCompare(String(b.affix_code || ""));
+    });
+}
+
+function getRarityRule(rarity) {
+  return state.rarityRuleMap.get(rarity) || null;
+}
+
+function applyRarityDefaults(prefix) {
+  const rarity = $(`${prefix}_rarity`).value;
+  const rule = getRarityRule(rarity);
+  if (!rule) return;
+
+  if ($(`${prefix}_random_primary_min`)) $(`${prefix}_random_primary_min`).value = rule.primary_min ?? 0;
+  if ($(`${prefix}_random_primary_max`)) $(`${prefix}_random_primary_max`).value = rule.primary_max ?? 0;
+  if ($(`${prefix}_random_secondary_min`)) $(`${prefix}_random_secondary_min`).value = rule.secondary_min ?? 0;
+  if ($(`${prefix}_random_secondary_max`)) $(`${prefix}_random_secondary_max`).value = rule.secondary_max ?? 0;
+}
+
+function createTopHitsHtml() {
+  return `<div class="affix-top-hits" style="display:flex;flex-direction:column;gap:6px;"></div>`;
 }
 
 function createAffixModuleHtml(prefix, moduleId, data = null) {
@@ -497,7 +593,14 @@ function createAffixModuleHtml(prefix, moduleId, data = null) {
       <div class="module-fixed-block">
         <div class="row">
           <div class="field col-12">
-            <label>Passendstes Affix auswählen</label>
+            <label>Top Treffer</label>
+            ${createTopHitsHtml()}
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="field col-12">
+            <label>Fallback-Auswahl</label>
             <select class="affix-select"></select>
           </div>
         </div>
@@ -587,8 +690,15 @@ function createChoiceOptionHtml(data = null) {
           <label>Suche Affix</label>
           <input class="choice-option-search" type="text" placeholder="z.B. Intelligenz, Krit..." />
         </div>
-        <div class="field col-6">
-          <label>Affix auswählen</label>
+        <div class="field col-8">
+          <label>Top Treffer</label>
+          ${createTopHitsHtml()}
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field col-10">
+          <label>Fallback-Auswahl</label>
           <select class="choice-option-affix-select"></select>
         </div>
         <div class="field col-2">
@@ -638,10 +748,56 @@ function createChoiceOptionHtml(data = null) {
   `;
 }
 
-function refreshAffixModuleSelects(container, itemType) {
-  container.querySelectorAll(".affix-module").forEach(mod => {
-    refreshSingleAffixModule(mod, itemType);
+function renderTopHits(target, ranked, onPick) {
+  if (!target) return;
+  target.innerHTML = "";
+
+  if (!ranked.length) {
+    target.innerHTML = `<div class="small-note">Keine passenden Affixe gefunden.</div>`;
+    return;
+  }
+
+  ranked.slice(0, 5).forEach(def => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn-secondary btn-small";
+    btn.style.textAlign = "left";
+    btn.textContent = `${def.description_template} [${def.affix_code}]`;
+    btn.onclick = onPick.bind(null, def);
+    target.appendChild(btn);
   });
+}
+
+function setAffixOverrideFields(root, def, prefix = "") {
+  if (!root || !def) return;
+
+  const minEl = root.querySelector(`.${prefix}value-min`);
+  const maxEl = root.querySelector(`.${prefix}value-max`);
+  const min2El = root.querySelector(`.${prefix}value2-min`);
+  const max2El = root.querySelector(`.${prefix}value2-max`);
+  const statEl = root.querySelector(`.${prefix}stat-name`);
+  const modEl = root.querySelector(`.${prefix}mod-type`);
+  const descEl = root.querySelector(`.${prefix}desc-template`);
+
+  if (minEl) minEl.value = def.value_min ?? "";
+  if (maxEl) maxEl.value = def.value_max ?? "";
+  if (min2El) min2El.value = def.value2_min ?? "";
+  if (max2El) max2El.value = def.value2_max ?? "";
+  if (statEl) statEl.value = def.stat_name ?? "";
+  if (modEl) modEl.value = def.mod_type ?? "";
+  if (descEl) descEl.value = def.description_template ?? "";
+}
+
+function readAffixOverrideFields(root, prefix = "") {
+  return {
+    stat_name: root.querySelector(`.${prefix}stat-name`)?.value?.trim() || null,
+    mod_type: root.querySelector(`.${prefix}mod-type`)?.value?.trim() || null,
+    value_min: parseNullableNumber(root.querySelector(`.${prefix}value-min`)?.value, false),
+    value_max: parseNullableNumber(root.querySelector(`.${prefix}value-max`)?.value, false),
+    value2_min: parseNullableNumber(root.querySelector(`.${prefix}value2-min`)?.value, false),
+    value2_max: parseNullableNumber(root.querySelector(`.${prefix}value2-max`)?.value, false),
+    description_template: root.querySelector(`.${prefix}desc-template`)?.value?.trim() || ""
+  };
 }
 
 function refreshSingleAffixModule(mod, itemType) {
@@ -664,7 +820,7 @@ function refreshSingleAffixModule(mod, itemType) {
     const previous = fixedSelect.dataset.value || fixedSelect.value || "";
     fixedSelect.innerHTML = `<option value="">- bitte wählen -</option>`;
 
-    ranked.slice(0, 50).forEach(def => {
+    ranked.slice(0, 100).forEach(def => {
       const opt = document.createElement("option");
       opt.value = def.id;
       opt.textContent = `${def.affix_code} | ${def.description_template}`;
@@ -672,12 +828,21 @@ function refreshSingleAffixModule(mod, itemType) {
     });
 
     let selectedValue = previous;
-    if (!selectedValue && ranked.length) {
-      selectedValue = String(ranked[0].id);
-    }
+    if (!selectedValue && ranked.length) selectedValue = String(ranked[0].id);
 
     fixedSelect.value = selectedValue;
     fixedSelect.dataset.value = selectedValue;
+
+    renderTopHits(
+      mod.querySelector(".affix-top-hits"),
+      ranked,
+      (def) => {
+        fixedSelect.value = String(def.id);
+        fixedSelect.dataset.value = String(def.id);
+        mod.dataset.fixedManualValues = "";
+        setAffixOverrideFields(mod, def, "fixed-");
+      }
+    );
 
     const selectedDef = ranked.find(d => String(d.id) === String(selectedValue))
       || state.affixDefinitions.find(d => String(d.id) === String(selectedValue));
@@ -695,7 +860,7 @@ function refreshSingleAffixModule(mod, itemType) {
     const previous = select.dataset.value || select.value || "";
     select.innerHTML = `<option value="">- bitte wählen -</option>`;
 
-    optionRanked.slice(0, 50).forEach(def => {
+    optionRanked.slice(0, 100).forEach(def => {
       const opt = document.createElement("option");
       opt.value = def.id;
       opt.textContent = `${def.affix_code} | ${def.description_template}`;
@@ -703,12 +868,21 @@ function refreshSingleAffixModule(mod, itemType) {
     });
 
     let selectedValue = previous;
-    if (!selectedValue && optionRanked.length) {
-      selectedValue = String(optionRanked[0].id);
-    }
+    if (!selectedValue && optionRanked.length) selectedValue = String(optionRanked[0].id);
 
     select.value = selectedValue;
     select.dataset.value = selectedValue;
+
+    renderTopHits(
+      optionEl.querySelector(".affix-top-hits"),
+      optionRanked,
+      (def) => {
+        select.value = String(def.id);
+        select.dataset.value = String(def.id);
+        optionEl.dataset.manualValues = "";
+        setAffixOverrideFields(optionEl, def, "choice-");
+      }
+    );
 
     const selectedDef = optionRanked.find(d => String(d.id) === String(selectedValue))
       || state.affixDefinitions.find(d => String(d.id) === String(selectedValue));
@@ -716,6 +890,12 @@ function refreshSingleAffixModule(mod, itemType) {
     if (selectedDef && !optionEl.dataset.manualValues) {
       setAffixOverrideFields(optionEl, selectedDef, "choice-");
     }
+  });
+}
+
+function refreshAffixModuleSelects(container, itemType) {
+  container.querySelectorAll(".affix-module").forEach(mod => {
+    refreshSingleAffixModule(mod, itemType);
   });
 }
 
@@ -876,6 +1056,16 @@ async function refreshCreateItemCode() {
   $("create_item_code_preview").value = code;
 }
 
+function buildDescriptionFromAffix(def) {
+  let text = def.description_template || "";
+  const value = def.value_max ?? def.value_min;
+  const value2 = def.value2_max ?? def.value2_min;
+
+  text = text.replaceAll("{value}", value !== null && value !== undefined ? String(value) : "");
+  text = text.replaceAll("{value2}", value2 !== null && value2 !== undefined ? String(value2) : "");
+  return text.trim();
+}
+
 function collectAffixModules(prefix) {
   const modules = [];
   const root = $(`${prefix}AffixModuleList`);
@@ -999,23 +1189,10 @@ function buildPreviewHeaderLines(baseItem) {
       return [`${formatPreviewNumber(armorMin, 0)} - ${formatPreviewNumber(armorMax, 0)}`, "Rüstung"];
     }
     const armorBase = parseNullableNumber(baseItem.armor_base, true);
-    if (armorBase !== null) {
-      return [formatPreviewNumber(armorBase, 0), "Rüstung"];
-    }
+    if (armorBase !== null) return [formatPreviewNumber(armorBase, 0), "Rüstung"];
   }
 
   return [];
-}
-
-function buildDescriptionFromAffix(def) {
-  let text = def.description_template || "";
-  const value = def.value_max ?? def.value_min;
-  const value2 = def.value2_max ?? def.value2_min;
-
-  text = text.replaceAll("{value}", value !== null && value !== undefined ? String(value) : "");
-  text = text.replaceAll("{value2}", value2 !== null && value2 !== undefined ? String(value2) : "");
-
-  return text.trim();
 }
 
 function buildPreviewData(baseItem, modules, powerData) {
@@ -1052,7 +1229,7 @@ function buildPreviewData(baseItem, modules, powerData) {
     } else if ((powerData.value_min ?? null) !== null || (powerData.value_max ?? null) !== null) {
       const a = powerData.value_min ?? "";
       const b = powerData.value_max ?? "";
-      if (a !== "" && b !== "") line += ` [${a} - ${b}]%`;
+      if (a !== "" && b !== "") line += ` [${a} - ${b}]`;
     }
     powerLines.push(line);
   }
@@ -1063,11 +1240,16 @@ function buildPreviewData(baseItem, modules, powerData) {
   if (baseItem.binding_mode === "bind_on_equip") footer.push("Bind on Equip");
   if (baseItem.binding_mode === "bind_on_pickup") footer.push("Bind on Pickup");
   if (baseItem.is_unique_equipped) footer.push("Unique Equipped");
+
   if (baseItem.source_type === "crafted" && baseItem.crafted_by) {
-    const craftedName = baseItem.crafted_by === "blacksmith" ? "Schmied" : baseItem.crafted_by === "jeweler" ? "Juwelier" : baseItem.crafted_by;
+    const craftedName =
+      baseItem.crafted_by === "blacksmith" ? "Schmied" :
+      baseItem.crafted_by === "jeweler" ? "Juwelier" :
+      baseItem.crafted_by;
     const tier = baseItem.crafted_tier ? ` (Stufe ${baseItem.crafted_tier})` : "";
     footer.push(`Hergestellt von: ${craftedName}${tier}`);
   }
+
   if (baseItem.level_requirement) footer.push(String(baseItem.level_requirement));
 
   return {
@@ -1235,15 +1417,11 @@ function updateEditPreview() {
 
 function resetCreateForm() {
   $("createForm").reset();
-  $("create_random_primary_min").value = 0;
-  $("create_random_primary_max").value = 0;
-  $("create_random_secondary_min").value = 0;
-  $("create_random_secondary_max").value = 0;
-  $("create_binding_mode").value = "tradable";
   $("createAffixModuleList").innerHTML = "";
   $("create_has_power").checked = false;
   $("createPowerBlock").classList.add("hidden");
   populateFamilySelectors("create");
+  applyRarityDefaults("create");
   renderTooltipPreview("createPreviewContent", null);
 }
 
@@ -1318,9 +1496,9 @@ async function persistItemToDatabase(baseItem, modules, powerData, existingItemI
     })()
   ]);
 
-  let fixedRows = [];
-  let groupRows = [];
-  let optionRows = [];
+  const fixedRows = [];
+  const groupRows = [];
+  const optionRows = [];
 
   modules.forEach((mod, idx) => {
     if (mod.kind === "fixed") {
@@ -1410,7 +1588,7 @@ async function persistItemToDatabase(baseItem, modules, powerData, existingItemI
     const { data: insertedGroups, error } = await supabaseClient
       .from("item_choice_groups")
       .insert(groupInsertPayload)
-      .select("id,group_code,display_label,property_category,choose_count,display_order");
+      .select("id,group_code");
 
     if (error) throw error;
 
@@ -1479,7 +1657,6 @@ async function updateCurrentItemFromForm() {
 async function deleteCurrentItem() {
   const itemId = parseNullableNumber($("edit_item_id").value, true);
   if (!itemId) throw new Error("Kein Item ausgewählt.");
-
   if (!window.confirm("Dieses Item wirklich löschen?")) return;
 
   const { data: groups } = await supabaseClient.from("item_choice_groups").select("id").eq("item_id", itemId);
@@ -1509,11 +1686,7 @@ async function deleteCurrentItem() {
 }
 
 async function loadItemsForList() {
-  const { data, error } = await supabaseClient
-    .from("items")
-    .select("*")
-    .order("display_name");
-
+  const { data, error } = await supabaseClient.from("items").select("*").order("display_name");
   if (error) throw error;
   state.items = data || [];
   renderItemList();
@@ -1579,6 +1752,22 @@ function renderEditItemList() {
     });
 }
 
+function findAffixDefinitionIdByDefinitionLike(row) {
+  const scored = state.affixDefinitions.map(def => {
+    let score = 0;
+    if (def.stat_name === row.stat_name) score += 500;
+    if (def.mod_type === row.mod_type) score += 300;
+    if (String(def.description_template || "") === String(row.description_template || "")) score += 800;
+    if (def.value_min == row.value_min) score += 100;
+    if (def.value_max == row.value_max) score += 100;
+    if (def.value2_min == row.value2_min) score += 50;
+    if (def.value2_max == row.value2_max) score += 50;
+    return { def, score };
+  }).sort((a, b) => b.score - a.score);
+
+  return scored[0]?.def?.id || "";
+}
+
 async function loadItemIntoEdit(itemId) {
   const { data: item, error: itemErr } = await supabaseClient.from("items").select("*").eq("id", itemId).single();
   if (itemErr) throw itemErr;
@@ -1610,154 +1799,6 @@ async function loadItemIntoEdit(itemId) {
   }
 
   fillEditForm(item, fixedRows || [], groups || [], options || []);
-}
-
-function findAffixDefinitionIdByDefinitionLike(row) {
-  const scored = state.affixDefinitions.map(def => {
-    let score = 0;
-
-    if (def.stat_name === row.stat_name) score += 500;
-    if (def.mod_type === row.mod_type) score += 300;
-    if (String(def.description_template || "") === String(row.description_template || "")) score += 800;
-
-    if (def.value_min == row.value_min) score += 100;
-    if (def.value_max == row.value_max) score += 100;
-    if (def.value2_min == row.value2_min) score += 50;
-    if (def.value2_max == row.value2_max) score += 50;
-
-    return { def, score };
-  }).sort((a, b) => b.score - a.score);
-
-  return scored[0]?.def?.id || "";
-}
-
-function normalizeForSearch(value) {
-  return String(value || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/ß/g, "ss")
-    .replace(/ä/g, "a")
-    .replace(/ö/g, "o")
-    .replace(/ü/g, "u")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-}
-
-function levenshtein(a, b) {
-  a = normalizeForSearch(a);
-  b = normalizeForSearch(b);
-
-  const matrix = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
-
-  for (let i = 0; i <= a.length; i++) matrix[i][0] = i;
-  for (let j = 0; j <= b.length; j++) matrix[0][j] = j;
-
-  for (let i = 1; i <= a.length; i++) {
-    for (let j = 1; j <= b.length; j++) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      matrix[i][j] = Math.min(
-        matrix[i - 1][j] + 1,
-        matrix[i][j - 1] + 1,
-        matrix[i - 1][j - 1] + cost
-      );
-    }
-  }
-
-  return matrix[a.length][b.length];
-}
-
-function fuzzyScoreAffix(def, query) {
-  const q = normalizeForSearch(query);
-  if (!q) return 0;
-
-  const code = normalizeForSearch(def.affix_code || "");
-  const stat = normalizeForSearch(def.stat_name || "");
-  const desc = normalizeForSearch(def.description_template || "");
-
-  let score = 0;
-
-  if (code === q) score += 1000;
-  if (stat === q) score += 1000;
-  if (desc === q) score += 1000;
-
-  if (code.includes(q)) score += 400;
-  if (stat.includes(q)) score += 600;
-  if (desc.includes(q)) score += 500;
-
-  const qTokens = q.split(" ").filter(Boolean);
-  for (const token of qTokens) {
-    if (code.includes(token)) score += 90;
-    if (stat.includes(token)) score += 120;
-    if (desc.includes(token)) score += 110;
-  }
-
-  const statDistance = levenshtein(q, stat);
-  const codeDistance = levenshtein(q, code);
-  const descDistance = levenshtein(q, desc);
-
-  score += Math.max(0, 120 - statDistance * 10);
-  score += Math.max(0, 80 - codeDistance * 8);
-  score += Math.max(0, 70 - descDistance * 5);
-
-  return score;
-}
-
-function rankAffixesForItemType(itemType, category = null, search = "") {
-  const allowedIds = state.affixAllowedByType.get(itemType) || new Set();
-  const q = search.trim();
-
-  return state.affixDefinitions
-    .filter(def => {
-      if (!allowedIds.has(def.id)) return false;
-      if (category && def.affix_category !== category) return false;
-      return true;
-    })
-    .map(def => ({
-      ...def,
-      _score: fuzzyScoreAffix(def, q)
-    }))
-    .sort((a, b) => {
-      if (q) {
-        if (b._score !== a._score) return b._score - a._score;
-      }
-      if ((a.sort_order || 0) !== (b.sort_order || 0)) {
-        return (a.sort_order || 0) - (b.sort_order || 0);
-      }
-      return String(a.affix_code || "").localeCompare(String(b.affix_code || ""));
-    });
-}
-
-function setAffixOverrideFields(root, def, prefix = "") {
-  if (!root || !def) return;
-
-  const minEl = root.querySelector(`.${prefix}value-min`);
-  const maxEl = root.querySelector(`.${prefix}value-max`);
-  const min2El = root.querySelector(`.${prefix}value2-min`);
-  const max2El = root.querySelector(`.${prefix}value2-max`);
-  const statEl = root.querySelector(`.${prefix}stat-name`);
-  const modEl = root.querySelector(`.${prefix}mod-type`);
-  const descEl = root.querySelector(`.${prefix}desc-template`);
-
-  if (minEl) minEl.value = def.value_min ?? "";
-  if (maxEl) maxEl.value = def.value_max ?? "";
-  if (min2El) min2El.value = def.value2_min ?? "";
-  if (max2El) max2El.value = def.value2_max ?? "";
-  if (statEl) statEl.value = def.stat_name ?? "";
-  if (modEl) modEl.value = def.mod_type ?? "";
-  if (descEl) descEl.value = def.description_template ?? "";
-}
-
-function readAffixOverrideFields(root, prefix = "") {
-  return {
-    stat_name: root.querySelector(`.${prefix}stat-name`)?.value?.trim() || null,
-    mod_type: root.querySelector(`.${prefix}mod-type`)?.value?.trim() || null,
-    value_min: parseNullableNumber(root.querySelector(`.${prefix}value-min`)?.value, false),
-    value_max: parseNullableNumber(root.querySelector(`.${prefix}value-max`)?.value, false),
-    value2_min: parseNullableNumber(root.querySelector(`.${prefix}value2-min`)?.value, false),
-    value2_max: parseNullableNumber(root.querySelector(`.${prefix}value2-max`)?.value, false),
-    description_template: root.querySelector(`.${prefix}desc-template`)?.value?.trim() || ""
-  };
 }
 
 function fillEditForm(item, fixedRows, groups, options) {
@@ -1802,7 +1843,6 @@ function fillEditForm(item, fixedRows, groups, options) {
   $("edit_power_value_max").value = powerRow?.value_max ?? "";
 
   const normalFixed = fixedRows.filter(r => r.property_category !== "power");
-
   const modRoot = $("editAffixModuleList");
   modRoot.innerHTML = "";
 
@@ -1868,7 +1908,6 @@ function fillEditForm(item, fixedRows, groups, options) {
 
   bindAffixModuleEvents(modRoot, "edit");
   refreshEditDerivedFields();
-
   $("editForm").classList.remove("hidden");
   $("editHint").classList.add("hidden");
   updateEditPreview();
@@ -1930,6 +1969,7 @@ async function initAppAfterAuth() {
   await loadReferenceData();
   await loadItemsForList();
   renderEditItemList();
+  applyRarityDefaults("create");
   refreshCreateDerivedFields();
 }
 
@@ -1973,6 +2013,11 @@ function wireCreateEvents() {
   ].forEach(id => {
     $(id).addEventListener("input", updateCreatePreview);
     $(id).addEventListener("change", updateCreatePreview);
+  });
+
+  $("create_rarity").addEventListener("change", () => {
+    applyRarityDefaults("create");
+    updateCreatePreview();
   });
 
   $("create_has_power").addEventListener("change", () => {
@@ -2029,6 +2074,11 @@ function wireEditEvents() {
   ].forEach(id => {
     $(id).addEventListener("input", updateEditPreview);
     $(id).addEventListener("change", updateEditPreview);
+  });
+
+  $("edit_rarity").addEventListener("change", () => {
+    applyRarityDefaults("edit");
+    updateEditPreview();
   });
 
   $("edit_has_power").addEventListener("change", () => {
