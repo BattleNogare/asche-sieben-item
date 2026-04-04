@@ -13,6 +13,7 @@ const state = {
   equipSlotItemTypes: [],
   affixDefinitions: [],
   affixAllowedByType: new Map(),
+  affixSearchPoolByType: new Map(),
   itemTypeToSlot: new Map(),
   itemRarityRules: [],
   rarityRuleMap: new Map(),
@@ -185,9 +186,44 @@ function normalizeForSearch(value) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/ß/g, "ss")
-    .replace(/ä/g, "a")
-    .replace(/ö/g, "o")
-    .replace(/ü/g, "u")
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/intilligenz/g, "intelligenz")
+    .replace(/geschiklichkeit/g, "geschicklichkeit")
+    .replace(/kritischer trefferschaden/g, "krit trefferschaden")
+    .replace(/kritische trefferchance/g, "krit trefferchance")
+    .replace(/abklingzeiten/g, "cooldown")
+    .replace(/ressourcenkosten/g, "resource")
+    .replace(/angriffsgeschwindigkeit/g, "attack speed")
+    .replace(/flaechenschaden/g, "flaechenschaden")
+    .replace(/flächenschaden/g, "flaechenschaden")
+    .replace(/leben pro treffer/g, "life on hit")
+    .replace(/leben pro getoetetem gegner/g, "life on kill")
+    .replace(/leben pro getötetem gegner/g, "life on kill")
+    .replace(/widerstand gegen alle schadensarten/g, "all resistance")
+    .replace(/bewegungsgeschwindigkeit/g, "movement speed")
+    .replace(/dornenschaden/g, "thorns")
+    .replace(/sockel/g, "socket")
+    .replace(/intelligenz/g, "intelligence")
+    .replace(/staerke/g, "strength")
+    .replace(/stärke/g, "strength")
+    .replace(/geschicklichkeit/g, "dexterity")
+    .replace(/vitalitaet/g, "vitality")
+    .replace(/vitalität/g, "vitality")
+    .replace(/ruestung/g, "armor")
+    .replace(/rüstung/g, "armor")
+    .replace(/blockchance/g, "block chance")
+    .replace(/schaden gegen elitegegner/g, "elite damage")
+    .replace(/ressource/g, "resource")
+    .replace(/heiligschaden/g, "holy damage")
+    .replace(/arkanschaden/g, "arcane damage")
+    .replace(/kaelteschaden/g, "cold damage")
+    .replace(/kälteschaden/g, "cold damage")
+    .replace(/blitzschaden/g, "lightning damage")
+    .replace(/giftschaden/g, "poison damage")
+    .replace(/feuerschaden/g, "fire damage")
+    .replace(/schaden/g, "damage")
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 }
@@ -210,6 +246,7 @@ function levenshtein(a, b) {
       );
     }
   }
+
   return matrix[a.length][b.length];
 }
 
@@ -220,31 +257,36 @@ function fuzzyScoreAffix(def, query) {
   const code = normalizeForSearch(def.affix_code || "");
   const stat = normalizeForSearch(def.stat_name || "");
   const desc = normalizeForSearch(def.description_template || "");
+  const category = normalizeForSearch(def.affix_category || "");
 
   let score = 0;
 
-  if (code === q) score += 1000;
-  if (stat === q) score += 1200;
-  if (desc === q) score += 1100;
+  if (desc === q) score += 2000;
+  if (stat === q) score += 1800;
+  if (code === q) score += 1400;
 
-  if (code.includes(q)) score += 450;
-  if (stat.includes(q)) score += 650;
-  if (desc.includes(q)) score += 550;
+  if (desc.includes(q)) score += 950;
+  if (stat.includes(q)) score += 800;
+  if (code.includes(q)) score += 600;
+  if (category.includes(q)) score += 250;
 
   const qTokens = q.split(" ").filter(Boolean);
   for (const token of qTokens) {
-    if (code.includes(token)) score += 100;
+    if (desc.includes(token)) score += 180;
     if (stat.includes(token)) score += 140;
-    if (desc.includes(token)) score += 130;
+    if (code.includes(token)) score += 100;
+    if (category.includes(token)) score += 40;
   }
 
+  const descDistance = levenshtein(q, desc);
   const statDistance = levenshtein(q, stat);
   const codeDistance = levenshtein(q, code);
-  const descDistance = levenshtein(q, desc);
 
-  score += Math.max(0, 120 - statDistance * 10);
-  score += Math.max(0, 80 - codeDistance * 8);
-  score += Math.max(0, 70 - descDistance * 5);
+  score += Math.max(0, 220 - descDistance * 8);
+  score += Math.max(0, 150 - statDistance * 10);
+  score += Math.max(0, 90 - codeDistance * 7);
+
+  if (def.source === "affix_definitions") score += 50;
 
   return score;
 }
@@ -392,20 +434,152 @@ async function getSessionAndProfile() {
   state.profile = profile || null;
 }
 
+function pushAffixSearchEntry(itemType, entry) {
+  if (!itemType) return;
+  if (!state.affixSearchPoolByType.has(itemType)) {
+    state.affixSearchPoolByType.set(itemType, []);
+  }
+  state.affixSearchPoolByType.get(itemType).push(entry);
+}
+
+function buildAffixSearchPools({ itemRows, fixedRows, groupRows, optionRows }) {
+  state.affixSearchPoolByType = new Map();
+
+  const itemIdToType = new Map();
+  (itemRows || []).forEach(item => {
+    itemIdToType.set(item.id, item.item_type);
+  });
+
+  const groupIdToMeta = new Map();
+  (groupRows || []).forEach(group => {
+    groupIdToMeta.set(group.id, {
+      item_id: group.item_id,
+      property_category: group.property_category
+    });
+  });
+
+  for (const def of state.affixDefinitions) {
+    for (const [itemType, allowedSet] of state.affixAllowedByType.entries()) {
+      if (!allowedSet.has(def.id)) continue;
+
+      pushAffixSearchEntry(itemType, {
+        source: "affix_definitions",
+        source_id: def.id,
+        affix_code: def.affix_code,
+        affix_category: def.affix_category,
+        stat_name: def.stat_name,
+        mod_type: def.mod_type,
+        value_min: def.value_min,
+        value_max: def.value_max,
+        value2_min: def.value2_min,
+        value2_max: def.value2_max,
+        description_template: def.description_template,
+        sort_order: def.sort_order || 9999
+      });
+    }
+  }
+
+  (fixedRows || []).forEach(row => {
+    const itemType = itemIdToType.get(row.item_id);
+    if (!itemType) return;
+
+    pushAffixSearchEntry(itemType, {
+      source: "item_fixed_properties",
+      source_id: row.id,
+      affix_code: row.property_code || `fixed_${row.id}`,
+      affix_category: row.property_category,
+      stat_name: row.stat_name,
+      mod_type: row.mod_type,
+      value_min: row.value_min,
+      value_max: row.value_max,
+      value2_min: row.value2_min,
+      value2_max: row.value2_max,
+      description_template: row.description_template,
+      sort_order: row.display_order || 9999
+    });
+  });
+
+  (optionRows || []).forEach(row => {
+    const meta = groupIdToMeta.get(row.choice_group_id);
+    if (!meta) return;
+
+    const itemType = itemIdToType.get(meta.item_id);
+    if (!itemType) return;
+
+    pushAffixSearchEntry(itemType, {
+      source: "item_choice_group_options",
+      source_id: row.id,
+      affix_code: row.option_code || `choice_${row.id}`,
+      affix_category: meta.property_category,
+      stat_name: row.stat_name,
+      mod_type: row.mod_type,
+      value_min: row.value_min,
+      value_max: row.value_max,
+      value2_min: row.value2_min,
+      value2_max: row.value2_max,
+      description_template: row.description_template,
+      sort_order: row.display_order || 9999
+    });
+  });
+
+  for (const [itemType, rows] of state.affixSearchPoolByType.entries()) {
+    const seen = new Map();
+
+    rows.forEach(row => {
+      const key = [
+        row.affix_category || "",
+        row.stat_name || "",
+        row.mod_type || "",
+        row.value_min ?? "",
+        row.value_max ?? "",
+        row.value2_min ?? "",
+        row.value2_max ?? "",
+        row.description_template || ""
+      ].join("|");
+
+      if (!seen.has(key)) {
+        seen.set(key, row);
+      } else {
+        const oldRow = seen.get(key);
+        if (oldRow.source !== "affix_definitions" && row.source === "affix_definitions") {
+          seen.set(key, row);
+        }
+      }
+    });
+
+    state.affixSearchPoolByType.set(itemType, Array.from(seen.values()));
+  }
+}
+
 async function loadReferenceData() {
   const [
     equipSlotItemTypesRes,
     affixesRes,
-    rarityRulesRes
+    rarityRulesRes,
+    allowedRowsRes,
+    itemRowsRes,
+    fixedRowsRes,
+    groupRowsRes,
+    optionRowsRes
   ] = await Promise.all([
     supabaseClient.from("equip_slot_item_types").select("*").order("sort_order"),
     supabaseClient.from("affix_definitions").select("*").eq("is_enabled", true).order("sort_order"),
-    supabaseClient.from("item_rarity_rules").select("*")
+    supabaseClient.from("item_rarity_rules").select("*"),
+    supabaseClient.from("affix_definition_item_types").select("affix_definition_id,item_type"),
+    supabaseClient.from("items").select("id,item_type"),
+    supabaseClient.from("item_fixed_properties").select("*"),
+    supabaseClient.from("item_choice_groups").select("id,item_id,property_category"),
+    supabaseClient.from("item_choice_group_options").select("*")
   ]);
 
   if (equipSlotItemTypesRes.error) throw equipSlotItemTypesRes.error;
   if (affixesRes.error) throw affixesRes.error;
   if (rarityRulesRes.error) throw rarityRulesRes.error;
+  if (allowedRowsRes.error) throw allowedRowsRes.error;
+  if (itemRowsRes.error) throw itemRowsRes.error;
+  if (fixedRowsRes.error) throw fixedRowsRes.error;
+  if (groupRowsRes.error) throw groupRowsRes.error;
+  if (optionRowsRes.error) throw optionRowsRes.error;
 
   state.equipSlotItemTypes = equipSlotItemTypesRes.data || [];
   state.affixDefinitions = affixesRes.data || [];
@@ -421,23 +595,28 @@ async function loadReferenceData() {
     state.rarityRuleMap.set(rule.rarity, rule);
   });
 
-  const { data: allowedRows, error: allowedErr } = await supabaseClient
-    .from("affix_definition_item_types")
-    .select("affix_definition_id,item_type");
-
-  if (allowedErr) throw allowedErr;
-
   state.affixAllowedByType = new Map();
-  for (const row of allowedRows || []) {
+  (allowedRowsRes.data || []).forEach(row => {
     if (!state.affixAllowedByType.has(row.item_type)) {
       state.affixAllowedByType.set(row.item_type, new Set());
     }
     state.affixAllowedByType.get(row.item_type).add(row.affix_definition_id);
-  }
+  });
+
+  buildAffixSearchPools({
+    itemRows: itemRowsRes.data || [],
+    fixedRows: fixedRowsRes.data || [],
+    groupRows: groupRowsRes.data || [],
+    optionRows: optionRowsRes.data || []
+  });
 
   populateListTypeFilter();
   populateFamilySelectors("create");
   populateFamilySelectors("edit");
+
+  console.log("AffixDefinitions:", state.affixDefinitions.length);
+  console.log("AffixAllowedByType:", state.affixAllowedByType);
+  console.log("AffixSearchPoolByType:", state.affixSearchPoolByType);
 }
 
 function populateListTypeFilter() {
@@ -511,9 +690,8 @@ function getSelectedItemType(prefix) {
 }
 
 function getAllowedAffixesForItemType(itemType, category = null) {
-  const allowedIds = state.affixAllowedByType.get(itemType) || new Set();
-  return state.affixDefinitions.filter(def => {
-    if (!allowedIds.has(def.id)) return false;
+  const pool = state.affixSearchPoolByType.get(itemType) || [];
+  return pool.filter(def => {
     if (category && def.affix_category !== category) return false;
     return true;
   });
@@ -521,14 +699,28 @@ function getAllowedAffixesForItemType(itemType, category = null) {
 
 function rankAffixesForItemType(itemType, category = null, search = "") {
   return getAllowedAffixesForItemType(itemType, category)
-    .map(def => ({ ...def, _score: fuzzyScoreAffix(def, search) }))
+    .map(def => ({
+      ...def,
+      _score: fuzzyScoreAffix(def, search)
+    }))
     .sort((a, b) => {
       if (search.trim()) {
         if (b._score !== a._score) return b._score - a._score;
       }
+
+      const sourceScore = (src) => {
+        if (src === "affix_definitions") return 2;
+        if (src === "item_fixed_properties") return 1;
+        return 0;
+      };
+      if (sourceScore(b.source) !== sourceScore(a.source)) {
+        return sourceScore(b.source) - sourceScore(a.source);
+      }
+
       if ((a.sort_order || 0) !== (b.sort_order || 0)) {
         return (a.sort_order || 0) - (b.sort_order || 0);
       }
+
       return String(a.affix_code || "").localeCompare(String(b.affix_code || ""));
     });
 }
@@ -542,10 +734,15 @@ function applyRarityDefaults(prefix) {
   const rule = getRarityRule(rarity);
   if (!rule) return;
 
-  if ($(`${prefix}_random_primary_min`)) $(`${prefix}_random_primary_min`).value = rule.primary_min ?? 0;
-  if ($(`${prefix}_random_primary_max`)) $(`${prefix}_random_primary_max`).value = rule.primary_max ?? 0;
-  if ($(`${prefix}_random_secondary_min`)) $(`${prefix}_random_secondary_min`).value = rule.secondary_min ?? 0;
-  if ($(`${prefix}_random_secondary_max`)) $(`${prefix}_random_secondary_max`).value = rule.secondary_max ?? 0;
+  const pMin = rule.primary_min ?? rule.random_primary_min ?? rule.min_primary_affixes ?? rule.primary_affixes_min ?? 0;
+  const pMax = rule.primary_max ?? rule.random_primary_max ?? rule.max_primary_affixes ?? rule.primary_affixes_max ?? 0;
+  const sMin = rule.secondary_min ?? rule.random_secondary_min ?? rule.min_secondary_affixes ?? rule.secondary_affixes_min ?? 0;
+  const sMax = rule.secondary_max ?? rule.random_secondary_max ?? rule.max_secondary_affixes ?? rule.secondary_affixes_max ?? 0;
+
+  if ($(`${prefix}_random_primary_min`)) $(`${prefix}_random_primary_min`).value = pMin;
+  if ($(`${prefix}_random_primary_max`)) $(`${prefix}_random_primary_max`).value = pMax;
+  if ($(`${prefix}_random_secondary_min`)) $(`${prefix}_random_secondary_min`).value = sMin;
+  if ($(`${prefix}_random_secondary_max`)) $(`${prefix}_random_secondary_max`).value = sMax;
 }
 
 function createTopHitsHtml() {
@@ -582,7 +779,7 @@ function createAffixModuleHtml(prefix, moduleId, data = null) {
         </div>
         <div class="field col-3">
           <label>Suche Affix</label>
-          <input class="affix-search" type="text" placeholder="z.B. Intelligenz, Krit, Leben..." />
+          <input class="affix-search" type="text" placeholder="z.B. Intilligenz, Krit, Leben..." />
         </div>
         <div class="field col-2">
           <label>&nbsp;</label>
@@ -688,7 +885,7 @@ function createChoiceOptionHtml(data = null) {
       <div class="row">
         <div class="field col-4">
           <label>Suche Affix</label>
-          <input class="choice-option-search" type="text" placeholder="z.B. Intelligenz, Krit..." />
+          <input class="choice-option-search" type="text" placeholder="z.B. Intilligenz, Krit..." />
         </div>
         <div class="field col-8">
           <label>Top Treffer</label>
@@ -762,7 +959,9 @@ function renderTopHits(target, ranked, onPick) {
     btn.type = "button";
     btn.className = "btn-secondary btn-small";
     btn.style.textAlign = "left";
+    btn.style.whiteSpace = "normal";
     btn.textContent = `${def.description_template} [${def.affix_code}]`;
+    btn.title = `${def.source || "unknown"} | ${def.affix_category || ""} | ${def.stat_name || ""} | ${def.mod_type || ""}`;
     btn.onclick = onPick.bind(null, def);
     target.appendChild(btn);
   });
@@ -822,31 +1021,36 @@ function refreshSingleAffixModule(mod, itemType) {
 
     ranked.slice(0, 100).forEach(def => {
       const opt = document.createElement("option");
-      opt.value = def.id;
+      opt.value = `${def.source}:${def.source_id}:${def.affix_category}:${def.affix_code}`;
       opt.textContent = `${def.affix_code} | ${def.description_template}`;
       fixedSelect.appendChild(opt);
     });
 
     let selectedValue = previous;
-    if (!selectedValue && ranked.length) selectedValue = String(ranked[0].id);
+    if (!selectedValue && ranked.length) {
+      const d = ranked[0];
+      selectedValue = `${d.source}:${d.source_id}:${d.affix_category}:${d.affix_code}`;
+    }
 
     fixedSelect.value = selectedValue;
     fixedSelect.dataset.value = selectedValue;
 
-    renderTopHits(
-      mod.querySelector(".affix-top-hits"),
-      ranked,
-      (def) => {
-        fixedSelect.value = String(def.id);
-        fixedSelect.dataset.value = String(def.id);
-        mod.dataset.fixedManualValues = "";
-        setAffixOverrideFields(mod, def, "fixed-");
+    renderTopHits(mod.querySelector(".affix-top-hits"), ranked, (def) => {
+      const value = `${def.source}:${def.source_id}:${def.affix_category}:${def.affix_code}`;
+      fixedSelect.value = value;
+      fixedSelect.dataset.value = value;
+
+      const categorySelect = mod.querySelector(".affix-property-category");
+      if (categorySelect && def.affix_category && categorySelect.value !== def.affix_category) {
+        categorySelect.value = def.affix_category;
       }
-    );
 
-    const selectedDef = ranked.find(d => String(d.id) === String(selectedValue))
-      || state.affixDefinitions.find(d => String(d.id) === String(selectedValue));
+      mod.dataset.fixedManualValues = "";
+      setAffixOverrideFields(mod, def, "fixed-");
+      refreshSingleAffixModule(mod, itemType);
+    });
 
+    const selectedDef = ranked.find(d => `${d.source}:${d.source_id}:${d.affix_category}:${d.affix_code}` === String(selectedValue));
     if (selectedDef && !mod.dataset.fixedManualValues) {
       setAffixOverrideFields(mod, selectedDef, "fixed-");
     }
@@ -862,31 +1066,29 @@ function refreshSingleAffixModule(mod, itemType) {
 
     optionRanked.slice(0, 100).forEach(def => {
       const opt = document.createElement("option");
-      opt.value = def.id;
+      opt.value = `${def.source}:${def.source_id}:${def.affix_category}:${def.affix_code}`;
       opt.textContent = `${def.affix_code} | ${def.description_template}`;
       select.appendChild(opt);
     });
 
     let selectedValue = previous;
-    if (!selectedValue && optionRanked.length) selectedValue = String(optionRanked[0].id);
+    if (!selectedValue && optionRanked.length) {
+      const d = optionRanked[0];
+      selectedValue = `${d.source}:${d.source_id}:${d.affix_category}:${d.affix_code}`;
+    }
 
     select.value = selectedValue;
     select.dataset.value = selectedValue;
 
-    renderTopHits(
-      optionEl.querySelector(".affix-top-hits"),
-      optionRanked,
-      (def) => {
-        select.value = String(def.id);
-        select.dataset.value = String(def.id);
-        optionEl.dataset.manualValues = "";
-        setAffixOverrideFields(optionEl, def, "choice-");
-      }
-    );
+    renderTopHits(optionEl.querySelector(".affix-top-hits"), optionRanked, (def) => {
+      const value = `${def.source}:${def.source_id}:${def.affix_category}:${def.affix_code}`;
+      select.value = value;
+      select.dataset.value = value;
+      optionEl.dataset.manualValues = "";
+      setAffixOverrideFields(optionEl, def, "choice-");
+    });
 
-    const selectedDef = optionRanked.find(d => String(d.id) === String(selectedValue))
-      || state.affixDefinitions.find(d => String(d.id) === String(selectedValue));
-
+    const selectedDef = optionRanked.find(d => `${d.source}:${d.source_id}:${d.affix_category}:${d.affix_code}` === String(selectedValue));
     if (selectedDef && !optionEl.dataset.manualValues) {
       setAffixOverrideFields(optionEl, selectedDef, "choice-");
     }
@@ -928,7 +1130,12 @@ function bindAffixModuleEvents(container, prefix) {
     if (fixedSelect) {
       fixedSelect.onchange = () => {
         fixedSelect.dataset.value = fixedSelect.value;
-        const def = state.affixDefinitions.find(a => String(a.id) === String(fixedSelect.value));
+        const ranked = rankAffixesForItemType(
+          getSelectedItemType(prefix),
+          mod.querySelector(".affix-property-category").value,
+          mod.querySelector(".affix-search").value || ""
+        );
+        const def = ranked.find(d => `${d.source}:${d.source_id}:${d.affix_category}:${d.affix_code}` === String(fixedSelect.value));
         mod.dataset.fixedManualValues = "";
         if (def) setAffixOverrideFields(mod, def, "fixed-");
         prefix === "create" ? updateCreatePreview() : updateEditPreview();
@@ -974,7 +1181,12 @@ function bindAffixModuleEvents(container, prefix) {
       if (select) {
         select.onchange = () => {
           select.dataset.value = select.value;
-          const def = state.affixDefinitions.find(a => String(a.id) === String(select.value));
+          const ranked = rankAffixesForItemType(
+            getSelectedItemType(prefix),
+            mod.querySelector(".affix-property-category").value,
+            optionEl.querySelector(".choice-option-search").value || ""
+          );
+          const def = ranked.find(d => `${d.source}:${d.source_id}:${d.affix_category}:${d.affix_code}` === String(select.value));
           optionEl.dataset.manualValues = "";
           if (def) setAffixOverrideFields(optionEl, def, "choice-");
           prefix === "create" ? updateCreatePreview() : updateEditPreview();
@@ -1009,13 +1221,6 @@ function bindAffixModuleEvents(container, prefix) {
   });
 
   refreshAffixModuleSelects(container, getSelectedItemType(prefix));
-}
-
-function getTooltipArchetypeFromForm(prefix) {
-  const family = getSelectedFamily(prefix);
-  const itemType = getSelectedItemType(prefix);
-  const equipSlot = $(`${prefix}_equip_slot`).value;
-  return inferTooltipArchetype(itemType, equipSlot, family);
 }
 
 function refreshCreateDerivedFields() {
@@ -1076,10 +1281,16 @@ function collectAffixModules(prefix) {
     const is_always_present = mod.querySelector(".affix-is-always-present").value === "true";
 
     if (kind === "fixed") {
-      const affixId = parseNullableNumber(mod.querySelector(".affix-select").value, true);
-      if (!affixId) return;
+      const selectValue = mod.querySelector(".affix-select").value;
+      if (!selectValue) return;
 
-      const def = state.affixDefinitions.find(a => a.id === affixId);
+      const ranked = rankAffixesForItemType(
+        getSelectedItemType(prefix),
+        property_category,
+        mod.querySelector(".affix-search").value || ""
+      );
+
+      const def = ranked.find(d => `${d.source}:${d.source_id}:${d.affix_category}:${d.affix_code}` === String(selectValue));
       if (!def) return;
 
       const override = readAffixOverrideFields(mod, "fixed-");
@@ -1123,10 +1334,16 @@ function collectAffixModules(prefix) {
 
       const options = [];
       mod.querySelectorAll(".choice-option").forEach((optEl, optionIndex) => {
-        const affixId = parseNullableNumber(optEl.querySelector(".choice-option-affix-select").value, true);
-        if (!affixId) return;
+        const selectValue = optEl.querySelector(".choice-option-affix-select").value;
+        if (!selectValue) return;
 
-        const def = state.affixDefinitions.find(a => a.id === affixId);
+        const ranked = rankAffixesForItemType(
+          getSelectedItemType(prefix),
+          property_category,
+          optEl.querySelector(".choice-option-search").value || ""
+        );
+
+        const def = ranked.find(d => `${d.source}:${d.source_id}:${d.affix_category}:${d.affix_code}` === String(selectValue));
         if (!def) return;
 
         const override = readAffixOverrideFields(optEl, "choice-");
@@ -1505,7 +1722,7 @@ async function persistItemToDatabase(baseItem, modules, powerData, existingItemI
       const def = mod.affix_definition;
       fixedRows.push({
         item_id: itemId,
-        property_code: `${def.affix_code}_${idx + 1}`,
+        property_code: `${slugify(def.affix_code || def.stat_name || "fixed")}_${idx + 1}`,
         property_category: mod.property_category,
         stat_name: def.stat_name,
         mod_type: def.mod_type,
@@ -1546,7 +1763,7 @@ async function persistItemToDatabase(baseItem, modules, powerData, existingItemI
       mod.options.forEach((opt, optionIndex) => {
         optionRows.push({
           _group_local_key: localKey,
-          option_code: `${opt.affix_definition.affix_code}_${optionIndex + 1}`,
+          option_code: `${slugify(opt.affix_definition.affix_code || opt.affix_definition.stat_name || "choice")}_${optionIndex + 1}`,
           stat_name: opt.affix_definition.stat_name,
           mod_type: opt.affix_definition.mod_type,
           value_min: opt.affix_definition.value_min,
@@ -1632,6 +1849,7 @@ async function createItemFromForm() {
   await persistItemToDatabase(baseItem, modules, powerData, null);
   showStatus("Item erfolgreich angelegt.", "ok");
   resetCreateForm();
+  await loadReferenceData();
   await loadItemsForList();
   renderEditItemList();
 }
@@ -1650,6 +1868,7 @@ async function updateCurrentItemFromForm() {
 
   await persistItemToDatabase(baseItem, modules, powerData, itemId);
   showStatus("Item erfolgreich aktualisiert.", "ok");
+  await loadReferenceData();
   await loadItemsForList();
   renderEditItemList();
 }
@@ -1681,6 +1900,8 @@ async function deleteCurrentItem() {
   $("editHint").classList.remove("hidden");
   state.editCurrentItem = null;
   renderTooltipPreview("editPreviewContent", null);
+
+  await loadReferenceData();
   await loadItemsForList();
   renderEditItemList();
 }
@@ -1855,8 +2076,13 @@ function fillEditForm(item, fixedRows, groups, options) {
 
     const mod = modRoot.lastElementChild;
     const affixId = findAffixDefinitionIdByDefinitionLike(row);
+    const foundDef = state.affixDefinitions.find(a => a.id === affixId);
 
-    mod.querySelector(".affix-select").dataset.value = String(affixId || "");
+    if (foundDef) {
+      const value = `${foundDef.source || "affix_definitions"}:${foundDef.id}:${row.property_category}:${foundDef.affix_code}`;
+      mod.querySelector(".affix-select").dataset.value = String(value || "");
+    }
+
     mod.querySelector(".affix-search").value = row.stat_name || row.description_template || "";
     mod.querySelector(".fixed-stat-name").value = row.stat_name ?? "";
     mod.querySelector(".fixed-mod-type").value = row.mod_type ?? "";
@@ -1870,7 +2096,6 @@ function fillEditForm(item, fixedRows, groups, options) {
 
   groups.forEach((group, idx) => {
     const groupOptions = options.filter(o => o.choice_group_id === group.id);
-
     const isRandomFill =
       groupOptions.length === 0 &&
       String(group.display_label || "").toLowerCase().includes("zufällige");
@@ -1892,7 +2117,13 @@ function fillEditForm(item, fixedRows, groups, options) {
         const optionEl = list.lastElementChild;
 
         const affixId = findAffixDefinitionIdByDefinitionLike(opt);
-        optionEl.querySelector(".choice-option-affix-select").dataset.value = String(affixId || "");
+        const foundDef = state.affixDefinitions.find(a => a.id === affixId);
+
+        if (foundDef) {
+          const value = `${foundDef.source || "affix_definitions"}:${foundDef.id}:${group.property_category}:${foundDef.affix_code}`;
+          optionEl.querySelector(".choice-option-affix-select").dataset.value = String(value || "");
+        }
+
         optionEl.querySelector(".choice-option-search").value = opt.stat_name || opt.description_template || "";
         optionEl.querySelector(".choice-stat-name").value = opt.stat_name ?? "";
         optionEl.querySelector(".choice-mod-type").value = opt.mod_type ?? "";
@@ -1908,6 +2139,7 @@ function fillEditForm(item, fixedRows, groups, options) {
 
   bindAffixModuleEvents(modRoot, "edit");
   refreshEditDerivedFields();
+
   $("editForm").classList.remove("hidden");
   $("editHint").classList.add("hidden");
   updateEditPreview();
