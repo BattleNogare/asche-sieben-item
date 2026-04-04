@@ -181,41 +181,26 @@ async function login() {
     const email = $("login_email").value.trim();
     const password = $("login_password").value;
 
-    console.log("Email:", email);
-    console.log("SUPABASE_URL:", SUPABASE_URL);
-    console.log("ANON vorhanden:", !!SUPABASE_ANON_KEY);
-
     if (!email || !password) {
       showStatus("Bitte E-Mail und Passwort eingeben.", "error");
       return;
     }
 
-    console.log("Vor signInWithPassword");
+    const { data, error } = await supabaseClient.auth.signInWithPassword({
+      email,
+      password
+    });
 
-    const result = await Promise.race([
-      supabaseClient.auth.signInWithPassword({
-        email,
-        password
-      }),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Login-Timeout nach 15 Sekunden")), 15000)
-      )
-    ]);
-
-    console.log("Nach signInWithPassword:", result);
-
-    const { data, error } = result;
+    console.log("Login result:", data, error);
 
     if (error) {
-      console.error("Supabase Login Fehler:", error);
       throw error;
     }
 
-    console.log("Login data:", data);
+    showStatus("Login erfolgreich. Initialisiere App...", "ok");
 
-    await initAppAfterAuth();
-
-    showStatus("Login erfolgreich.", "ok");
+    // Kein direktes await initAppAfterAuth() hier nötig.
+    // Das übernimmt gleich der Auth-State-Handler sauber.
   } catch (err) {
     console.error("Login Catch Fehler:", err);
     showStatus(`Login fehlgeschlagen:\n${err.message}`, "error");
@@ -1403,3 +1388,4 @@ async function init() {
 }
 
 init();
+
