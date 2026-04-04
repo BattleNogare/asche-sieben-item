@@ -1,637 +1,912 @@
-const DEFAULT_SUPABASE_URL = "";
-const DEFAULT_SUPABASE_ANON_KEY = "";
+const SUPABASE_URL = "https://nnwmjwprfofihhbutcff.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ud21qd3ByZm9maWhoYnV0Y2ZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MTcyNzMsImV4cCI6MjA4ODk5MzI3M30.RM4EDjvjWN2R7IVfz-4GdhSIfQI4N0NescFshkHxWZ4";
+const ALLOWED_PROFILE_ID = "b934eac7-aae5-4ec2-abb7-d67d7dbdabad";
 
-let supabaseClient = null;
-let loadedEditItemId = null;
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-const ITEM_TYPE_META = {
-  sword_1h: { equip_slot: "weapon_main", tooltip_archetype: "weapon" },
-  axe_1h: { equip_slot: "weapon_main", tooltip_archetype: "weapon" },
-  shield: { equip_slot: "weapon_off", tooltip_archetype: "offhand" },
-  crusader_shield: { equip_slot: "weapon_off", tooltip_archetype: "offhand" },
-  orb: { equip_slot: "weapon_off", tooltip_archetype: "offhand" },
-  quiver: { equip_slot: "weapon_off", tooltip_archetype: "offhand" },
-  book: { equip_slot: "weapon_off", tooltip_archetype: "offhand" },
-  helmet: { equip_slot: "head", tooltip_archetype: "armor" },
-  amulet: { equip_slot: "amulet", tooltip_archetype: "jewelry" },
-  ring: { equip_slot: "ring_left", tooltip_archetype: "jewelry" },
-  belt: { equip_slot: "belt", tooltip_archetype: "armor" },
-  boots: { equip_slot: "feet", tooltip_archetype: "armor" },
-  gloves: { equip_slot: "hand", tooltip_archetype: "armor" },
-  pants: { equip_slot: "legs", tooltip_archetype: "armor" },
-  bracer: { equip_slot: "sleeve", tooltip_archetype: "armor" },
-  chest_armor: { equip_slot: "chest", tooltip_archetype: "armor" },
-  cloak: { equip_slot: "chest", tooltip_archetype: "armor" },
-  shoulder_armor: { equip_slot: "shoulders", tooltip_archetype: "armor" },
-  artifact: { equip_slot: "artifact", tooltip_archetype: "artifact" }
+const state = {
+  session: null,
+  user: null,
+  profile: null,
+  itemTypeMap: new Map(),     // item_type -> { equip_slot, sort_order }
+  itemTypes: [],
+  classRules: [],
+  classes: [],
+  allItems: [],
+  editItems: [],
+  currentEditItem: null
 };
 
-function initDefaults() {
-  if (DEFAULT_SUPABASE_URL) document.getElementById("supabaseUrl").value = DEFAULT_SUPABASE_URL;
-  if (DEFAULT_SUPABASE_ANON_KEY) document.getElementById("supabaseAnonKey").value = DEFAULT_SUPABASE_ANON_KEY;
+// ---------- helpers ----------
+function $(id) {
+  return document.getElementById(id);
 }
 
-function slugify(text) {
-  return (text || "")
+function showStatus(message, type = "info") {
+  const box = $("statusBox");
+  box.textContent = message;
+  box.className = `status ${type}`;
+  box.classList.remove("hidden");
+}
+
+function clearStatus() {
+  $("statusBox").classList.add("hidden");
+}
+
+function setTab(tabId) {
+  document.querySelectorAll(".tab-panel").forEach(el => el.classList.add("hidden"));
+  document.querySelectorAll(".tab-btn").forEach(el => el.classList.remove("active"));
+
+  $(tabId).classList.remove("hidden");
+  document.querySelector(`.tab-btn[data-tab="${tabId}"]`)?.classList.add("active");
+}
+
+function toSlug(value) {
+  return (value || "")
     .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
     .replace(/ß/g, "ss")
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "")
     .replace(/_+/g, "_");
 }
 
-function buildAutoItemCode(displayName, itemType) {
-  const typePart = slugify(itemType || "item");
-  const namePart = slugify(displayName || "neu");
-  return `${typePart}_${namePart}`;
-}
-
-function setMsg(id, text, cls = "muted") {
-  const el = document.getElementById(id);
-  el.className = `msg ${cls}`;
-  el.textContent = text || "";
-}
-
-function activateTab(tabId) {
-  document.querySelectorAll(".tab-btn").forEach(btn => {
-    btn.classList.toggle("active", btn.dataset.tab === tabId);
-  });
-  document.querySelectorAll(".tab-panel").forEach(panel => {
-    panel.classList.toggle("active", panel.id === tabId);
-  });
-}
-
-function getClient() {
-  const url = document.getElementById("supabaseUrl").value.trim();
-  const anonKey = document.getElementById("supabaseAnonKey").value.trim();
-
-  if (!url || !anonKey) {
-    throw new Error("Bitte Supabase URL und Anon Key eintragen.");
-  }
-
-  if (!supabaseClient) {
-    supabaseClient = window.supabase.createClient(url, anonKey);
-  }
-
-  return supabaseClient;
-}
-
-function showLoggedIn(user) {
-  document.getElementById("loginCard").classList.add("hidden");
-  document.getElementById("appShell").classList.remove("hidden");
-  document.getElementById("userInfo").textContent = `Eingeloggt als: ${user.email}`;
-}
-
-function showLoggedOut() {
-  document.getElementById("loginCard").classList.remove("hidden");
-  document.getElementById("appShell").classList.add("hidden");
-}
-
-function parseValue(key, value) {
-  if (value === "" || value === null || value === undefined) return undefined;
-
-  const intFields = [
-    "level_requirement",
-    "random_primary_min",
-    "random_primary_max",
-    "random_secondary_min",
-    "random_secondary_max",
-    "crafted_tier",
-    "display_order"
+function inferTooltipArchetype(itemType, equipSlot) {
+  const weaponMain = [
+    "axe_1h", "dagger", "mace_1h", "spear", "sword_1h", "ceremonial_knife",
+    "fist_weapon", "flail_1h", "mighty_weapon_1h", "scythe_1h", "mace_2h",
+    "polearm", "staff", "sword_2h", "flail_2h", "mighty_weapon_2h",
+    "scythe_2h", "bow", "crossbow", "hand_crossbow", "wand"
   ];
 
-  const floatFields = [
-    "damage_min",
-    "damage_max",
-    "attacks_per_second",
-    "armor_min",
-    "armor_max",
-    "value_min",
-    "value_max",
-    "value2_min",
-    "value2_max"
+  const armorTypes = [
+    "helmet", "soulstone", "mask", "hat", "shoulder_armor", "chest_armor",
+    "cloak", "bracer", "gloves", "belt", "mighty_belt", "pants", "boots"
   ];
 
-  if (intFields.includes(key)) return Number.parseInt(value, 10);
-  if (floatFields.includes(key)) return Number.parseFloat(value);
+  const jewelryTypes = ["amulet", "ring"];
+  const offhandTypes = ["shield", "crusader_shield", "orb", "quiver", "book"];
 
-  if (key === "is_unique_equipped") {
-    if (value === "true") return true;
-    if (value === "false") return false;
-  }
+  if (weaponMain.includes(itemType)) return "weapon";
+  if (armorTypes.includes(itemType)) return "armor";
+  if (jewelryTypes.includes(itemType)) return "jewelry";
+  if (offhandTypes.includes(itemType)) return "offhand";
+  if (itemType === "backpack") return "backpack";
+  if (itemType === "artifact") return "artifact";
 
-  if (key === "extra_data_json") return JSON.parse(value);
+  if (equipSlot === "weapon_main") return "weapon";
+  if (equipSlot === "weapon_off") return "offhand";
+  if (["head", "shoulders", "chest", "sleeve", "hand", "belt", "legs", "feet"].includes(equipSlot)) return "armor";
+  if (["amulet", "ring_left", "ring_right"].includes(equipSlot)) return "jewelry";
+  if (equipSlot === "backpack") return "backpack";
+  if (equipSlot === "artifact") return "artifact";
 
-  return value;
+  return "special";
 }
 
-function formToPayload(form) {
-  const data = new FormData(form);
-  const payload = {};
-
-  for (const [key, value] of data.entries()) {
-    if (value === "") continue;
-    if (key === "extra_data_json") {
-      payload.extra_data = parseValue(key, value);
-    } else {
-      payload[key] = parseValue(key, value);
-    }
-  }
-
-  return payload;
+function parseNullableNumber(value, integer = false) {
+  if (value === "" || value === null || value === undefined) return null;
+  const n = integer ? parseInt(value, 10) : parseFloat(value);
+  return Number.isNaN(n) ? null : n;
 }
 
-function fillForm(form, row) {
-  for (const el of form.elements) {
-    if (!el.name) continue;
+function parseNullableText(value) {
+  const v = (value || "").trim();
+  return v === "" ? null : v;
+}
 
-    if (el.name === "extra_data_json") {
-      el.value = row.extra_data ? JSON.stringify(row.extra_data, null, 2) : "";
-      continue;
+function boolFromCheckbox(id) {
+  return $(id).checked;
+}
+
+function setCheckbox(id, value) {
+  $(id).checked = !!value;
+}
+
+function buildRarityLabelFallback(rarity, itemType, archetype) {
+  const rarityMap = {
+    normal: "",
+    magic: "Magischer",
+    rare: "Seltener",
+    legendary: "Legendärer",
+    unique: "Einzigartiger",
+    unreal: "Unwirklicher"
+  };
+
+  const baseMap = {
+    weapon: "Waffe",
+    armor: "Rüstung",
+    offhand: "Nebenhand",
+    jewelry: "Schmuck",
+    backpack: "Rückenslot",
+    artifact: "Artefakt",
+    special: "Gegenstand"
+  };
+
+  const prefix = rarityMap[rarity] || "";
+  const base = baseMap[archetype] || itemType || "Gegenstand";
+  return prefix ? `${prefix} ${base}` : base;
+}
+
+function makeDefaultInternalName(itemCode) {
+  return itemCode || "";
+}
+
+function debounce(fn, wait = 250) {
+  let t = null;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...args), wait);
+  };
+}
+
+// ---------- auth ----------
+async function getSessionAndProfile() {
+  const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
+  if (sessionError) throw sessionError;
+
+  state.session = sessionData.session;
+  state.user = sessionData.session?.user || null;
+
+  if (!state.user) {
+    state.profile = null;
+    return;
+  }
+
+  const { data: profile, error: profileError } = await supabaseClient
+    .from("profiles")
+    .select("*")
+    .eq("id", state.user.id)
+    .maybeSingle();
+
+  if (profileError) throw profileError;
+  state.profile = profile || null;
+}
+
+function isAllowedUser() {
+  return state.user?.id === ALLOWED_PROFILE_ID && state.profile?.id === ALLOWED_PROFILE_ID;
+}
+
+async function login() {
+  clearStatus();
+  try {
+    const email = $("login_email").value.trim();
+    const password = $("login_password").value;
+
+    if (!email || !password) {
+      showStatus("Bitte E-Mail und Passwort eingeben.", "error");
+      return;
     }
 
-    const value = row[el.name];
+    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    if (error) throw error;
 
-    if (value === undefined || value === null) {
-      el.value = "";
-    } else if (typeof value === "boolean") {
-      el.value = value ? "true" : "false";
-    } else {
-      el.value = value;
-    }
+    await initAppAfterAuth();
+    showStatus("Login erfolgreich.", "ok");
+  } catch (err) {
+    showStatus(`Login fehlgeschlagen:\n${err.message}`, "error");
   }
 }
 
+async function logout() {
+  await supabaseClient.auth.signOut();
+  state.session = null;
+  state.user = null;
+  state.profile = null;
+  $("authCard").classList.remove("hidden");
+  $("appShell").classList.add("hidden");
+  showStatus("Ausgeloggt.", "info");
+}
+
+// ---------- data loading ----------
+async function loadReferenceData() {
+  // item types from equip_slot_item_types
+  const { data: slotTypeRows, error: slotTypeError } = await supabaseClient
+    .from("equip_slot_item_types")
+    .select("equip_slot, item_type, sort_order, is_enabled")
+    .order("sort_order", { ascending: true });
+
+  if (slotTypeError) throw slotTypeError;
+
+  state.itemTypeMap.clear();
+  state.itemTypes = [];
+
+  (slotTypeRows || [])
+    .filter(r => r.is_enabled !== false)
+    .forEach(row => {
+      state.itemTypeMap.set(row.item_type, {
+        equip_slot: row.equip_slot,
+        sort_order: row.sort_order ?? 0
+      });
+      state.itemTypes.push(row.item_type);
+    });
+
+  state.itemTypes = [...new Set(state.itemTypes)];
+
+  // class rules
+  const { data: classRules, error: classRulesError } = await supabaseClient
+    .from("item_type_class_rules")
+    .select("item_type, class_code, is_allowed");
+
+  if (classRulesError && !String(classRulesError.message).includes("permission")) {
+    throw classRulesError;
+  }
+  state.classRules = classRules || [];
+
+  // classes
+  const { data: classes, error: classesError } = await supabaseClient
+    .from("class_definitions")
+    .select("class_code, display_name")
+    .order("sort_order", { ascending: true });
+
+  if (classesError && !String(classesError.message).includes("permission")) {
+    throw classesError;
+  }
+  state.classes = classes || [];
+
+  populateItemTypeSelects();
+}
+
+function populateItemTypeSelects() {
+  const selects = [$("create_item_type"), $("edit_item_type"), $("list_filter_type")];
+  selects.forEach(sel => {
+    const current = sel.value;
+    sel.innerHTML = sel.id === "list_filter_type" ? `<option value="">alle</option>` : `<option value="">bitte wählen</option>`;
+
+    state.itemTypes.forEach(itemType => {
+      const opt = document.createElement("option");
+      opt.value = itemType;
+      opt.textContent = itemType;
+      sel.appendChild(opt);
+    });
+
+    if (current && state.itemTypes.includes(current)) {
+      sel.value = current;
+    }
+  });
+}
+
+async function loadItemsForList() {
+  const { data, error } = await supabaseClient
+    .from("items")
+    .select(`
+      id,
+      item_code,
+      internal_name,
+      display_name,
+      rarity,
+      rarity_label,
+      item_type,
+      equip_slot,
+      tooltip_archetype,
+      level_requirement,
+      binding_mode,
+      source_type,
+      crafted_tier,
+      is_unique_equipped,
+      damage_min,
+      damage_max,
+      attacks_per_second,
+      armor_base,
+      block_base,
+      random_primary_min,
+      random_primary_max,
+      random_secondary_min,
+      random_secondary_max
+    `)
+    .order("id", { ascending: false });
+
+  if (error) throw error;
+  state.allItems = data || [];
+  renderItemList();
+  renderEditItemList();
+}
+
+async function loadItemDeep(itemId) {
+  const { data: item, error: itemError } = await supabaseClient
+    .from("items")
+    .select("*")
+    .eq("id", itemId)
+    .single();
+
+  if (itemError) throw itemError;
+
+  const { data: fixedRows, error: fixedError } = await supabaseClient
+    .from("item_fixed_properties")
+    .select("*")
+    .eq("item_id", itemId)
+    .order("display_order", { ascending: true });
+
+  if (fixedError) throw fixedError;
+
+  const { data: groups, error: groupError } = await supabaseClient
+    .from("item_choice_groups")
+    .select("*")
+    .eq("item_id", itemId)
+    .order("display_order", { ascending: true });
+
+  if (groupError) throw groupError;
+
+  const groupIds = (groups || []).map(g => g.id);
+
+  let options = [];
+  if (groupIds.length > 0) {
+    const { data: optionRows, error: optionError } = await supabaseClient
+      .from("item_choice_group_options")
+      .select("*")
+      .in("choice_group_id", groupIds)
+      .order("display_order", { ascending: true });
+
+    if (optionError) throw optionError;
+    options = optionRows || [];
+  }
+
+  return {
+    item,
+    fixedRows: fixedRows || [],
+    groups: groups || [],
+    options
+  };
+}
+
+// ---------- render list ----------
+function renderItemList() {
+  const search = $("list_search").value.trim().toLowerCase();
+  const rarity = $("list_filter_rarity").value;
+  const itemType = $("list_filter_type").value;
+
+  let rows = [...state.allItems];
+
+  if (rarity) rows = rows.filter(r => r.rarity === rarity);
+  if (itemType) rows = rows.filter(r => r.item_type === itemType);
+  if (search) {
+    rows = rows.filter(r =>
+      (r.display_name || "").toLowerCase().includes(search) ||
+      (r.item_code || "").toLowerCase().includes(search) ||
+      (r.item_type || "").toLowerCase().includes(search) ||
+      (r.rarity_label || "").toLowerCase().includes(search)
+    );
+  }
+
+  const container = $("itemList");
+  container.innerHTML = "";
+
+  if (rows.length === 0) {
+    container.innerHTML = `<div class="muted">Keine Items gefunden.</div>`;
+    return;
+  }
+
+  rows.forEach(item => {
+    const card = document.createElement("div");
+    card.className = "item-card";
+    card.innerHTML = `
+      <div class="item-title">${escapeHtml(item.display_name || "")}</div>
+      <div class="muted">${escapeHtml(item.item_code || "")}</div>
+      <div style="margin-top:8px;">
+        <span class="pill">${escapeHtml(item.rarity || "")}</span>
+        <span class="pill">${escapeHtml(item.item_type || "")}</span>
+        <span class="pill">${escapeHtml(item.equip_slot || "")}</span>
+      </div>
+    `;
+    card.addEventListener("click", async () => {
+      await openEditItem(item.id);
+      setTab("tab-edit");
+    });
+    container.appendChild(card);
+  });
+}
+
+function renderEditItemList() {
+  const search = $("edit_search").value.trim().toLowerCase();
+  let rows = [...state.allItems];
+
+  if (search) {
+    rows = rows.filter(r =>
+      (r.display_name || "").toLowerCase().includes(search) ||
+      (r.item_code || "").toLowerCase().includes(search)
+    );
+  }
+
+  const container = $("editItemList");
+  container.innerHTML = "";
+
+  rows.forEach(item => {
+    const card = document.createElement("div");
+    card.className = "item-card";
+    card.innerHTML = `
+      <div class="item-title">${escapeHtml(item.display_name || "")}</div>
+      <div class="muted">${escapeHtml(item.item_code || "")}</div>
+      <div style="margin-top:8px;">
+        <span class="pill">${escapeHtml(item.rarity || "")}</span>
+        <span class="pill">${escapeHtml(item.item_type || "")}</span>
+      </div>
+    `;
+    card.addEventListener("click", async () => {
+      await openEditItem(item.id);
+    });
+    container.appendChild(card);
+  });
+
+  if (rows.length === 0) {
+    container.innerHTML = `<div class="muted">Keine Items gefunden.</div>`;
+  }
+}
+
+async function openEditItem(itemId) {
+  clearStatus();
+  try {
+    const payload = await loadItemDeep(itemId);
+    state.currentEditItem = payload;
+    fillEditForm(payload);
+    $("editHint").textContent = `Bearbeite: ${payload.item.display_name} (${payload.item.item_code})`;
+    $("editForm").classList.remove("hidden");
+  } catch (err) {
+    showStatus(`Item konnte nicht geladen werden:\n${err.message}`, "error");
+  }
+}
+
+// ---------- repeaters ----------
 function escapeHtml(str) {
   return String(str ?? "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
-function updateAutoFields() {
-  const displayName = document.getElementById("create_display_name").value.trim();
-  const itemType = document.getElementById("create_item_type").value.trim();
-  const itemCode = buildAutoItemCode(displayName, itemType);
-  document.getElementById("create_item_code_preview").value = itemCode;
-
-  const meta = ITEM_TYPE_META[itemType] || {};
-  document.getElementById("create_equip_slot_preview").value = meta.equip_slot || "";
-  document.getElementById("create_tooltip_archetype_preview").value = meta.tooltip_archetype || "";
-
-  updateHeaderPreview();
-}
-
-function updateHeaderPreview() {
-  const itemType = document.getElementById("create_item_type").value.trim();
-  const armorMin = document.getElementById("create_armor_min").value.trim();
-  const armorMax = document.getElementById("create_armor_max").value.trim();
-  const damageMin = document.getElementById("create_damage_min").value.trim();
-  const damageMax = document.getElementById("create_damage_max").value.trim();
-  const aps = document.getElementById("create_attacks_per_second").value.trim();
-
-  const target = document.getElementById("create_header_value_preview");
-  const archetype = (ITEM_TYPE_META[itemType]?.tooltip_archetype || "");
-
-  if (archetype === "armor") {
-    if (armorMin || armorMax) {
-      target.textContent = `${armorMin || "?"} - ${armorMax || "?"}\nRüstung`;
-    } else {
-      target.textContent = "Noch keine Rüstungswerte";
-    }
-    return;
-  }
-
-  if (archetype === "weapon") {
-    if (damageMin || damageMax || aps) {
-      target.textContent = `${damageMin || "?"} - ${damageMax || "?"} Schaden\n${aps || "?"} Angriffe pro Sekunde`;
-    } else {
-      target.textContent = "Noch keine Waffendaten";
-    }
-    return;
-  }
-
-  target.textContent = "Für diesen Typ kein Header-Basiswert vorgesehen";
-}
-
-function createFixedPrimaryRow(data = {}) {
-  const wrapper = document.createElement("div");
-  wrapper.className = "section-box fixed-row";
-  wrapper.dataset.id = data.id || "";
-  wrapper.innerHTML = `
-    <div class="three-col">
-      <div>
-        <label>property_code</label>
-        <input class="fp-property-code" value="${escapeHtml(data.property_code || "")}" placeholder="z. B. shield_block_chance" />
-      </div>
-      <div>
-        <label>property_category</label>
-        <select class="fp-property-category">
-          <option value="primary">primary</option>
-          <option value="secondary">secondary</option>
-          <option value="power">power</option>
-        </select>
-      </div>
-      <div>
-        <label>display_order</label>
-        <input class="fp-display-order" type="number" value="${data.display_order ?? ""}" placeholder="10" />
+function createFixedPropertyHtml(prefix, data = {}) {
+  return `
+    <div class="repeater-item fixed-property">
+      <div class="toolbar" style="justify-content:flex-end;">
+        <button type="button" class="btn-danger btn-small btn-remove-fixed">Entfernen</button>
       </div>
 
-      <div>
-        <label>stat_name</label>
-        <input class="fp-stat-name" value="${escapeHtml(data.stat_name || "")}" placeholder="z. B. block_chance" />
-      </div>
-      <div>
-        <label>mod_type</label>
-        <select class="fp-mod-type">
-          <option value="">leer</option>
-          <option value="flat">flat</option>
-          <option value="percent">percent</option>
-          <option value="range">range</option>
-          <option value="special">special</option>
-        </select>
-      </div>
-      <div>
-        <label>ID</label>
-        <input value="${escapeHtml(data.id || "")}" readonly />
-      </div>
-
-      <div>
-        <label>value_min</label>
-        <input class="fp-value-min" type="number" step="0.01" value="${data.value_min ?? ""}" />
-      </div>
-      <div>
-        <label>value_max</label>
-        <input class="fp-value-max" type="number" step="0.01" value="${data.value_max ?? ""}" />
-      </div>
-      <div>
-        <label>value2_min</label>
-        <input class="fp-value2-min" type="number" step="0.01" value="${data.value2_min ?? ""}" />
+      <div class="row">
+        <div class="field col-3">
+          <label>Property Code</label>
+          <input class="${prefix}_fixed_property_code" type="text" value="${escapeHtml(data.property_code || "")}" placeholder="z. B. shield_block_chance" />
+        </div>
+        <div class="field col-3">
+          <label>Property Category</label>
+          <select class="${prefix}_fixed_property_category">
+            ${selectOptions(["primary","secondary","power","meta"], data.property_category)}
+          </select>
+        </div>
+        <div class="field col-3">
+          <label>Stat Name</label>
+          <input class="${prefix}_fixed_stat_name" type="text" value="${escapeHtml(data.stat_name || "")}" placeholder="z. B. block_chance" />
+        </div>
+        <div class="field col-3">
+          <label>Mod Type</label>
+          <select class="${prefix}_fixed_mod_type">
+            ${selectOptions(["flat","percent","percent_add","percent_mult","range","special"], data.mod_type || "flat")}
+          </select>
+        </div>
       </div>
 
-      <div>
-        <label>value2_max</label>
-        <input class="fp-value2-max" type="number" step="0.01" value="${data.value2_max ?? ""}" />
+      <div class="row">
+        <div class="field col-3">
+          <label>Value Min</label>
+          <input class="${prefix}_fixed_value_min" type="number" step="0.01" value="${data.value_min ?? ""}" />
+        </div>
+        <div class="field col-3">
+          <label>Value Max</label>
+          <input class="${prefix}_fixed_value_max" type="number" step="0.01" value="${data.value_max ?? ""}" />
+        </div>
+        <div class="field col-3">
+          <label>Value2 Min</label>
+          <input class="${prefix}_fixed_value2_min" type="number" step="0.01" value="${data.value2_min ?? ""}" />
+        </div>
+        <div class="field col-3">
+          <label>Value2 Max</label>
+          <input class="${prefix}_fixed_value2_max" type="number" step="0.01" value="${data.value2_max ?? ""}" />
+        </div>
       </div>
-    </div>
 
-    <div style="margin-top: 12px;">
-      <label>description_template</label>
-      <textarea class="fp-description-template" placeholder="+{value}% Blockchance">${escapeHtml(data.description_template || "")}</textarea>
-    </div>
-
-    <div class="inline-actions" style="margin-top: 12px;">
-      <button type="button" class="danger remove-fixed-row-btn">Diesen Block entfernen</button>
+      <div class="row">
+        <div class="field col-9">
+          <label>Description Template</label>
+          <input class="${prefix}_fixed_description_template" type="text" value="${escapeHtml(data.description_template || "")}" placeholder="+{value}% Blockchance" />
+        </div>
+        <div class="field col-2">
+          <label>Display Order</label>
+          <input class="${prefix}_fixed_display_order" type="number" value="${data.display_order ?? 0}" />
+        </div>
+        <div class="field col-1">
+          <label>Immer</label>
+          <input class="${prefix}_fixed_is_always_present" type="checkbox" ${data.is_always_present === false ? "" : "checked"} />
+        </div>
+      </div>
     </div>
   `;
-
-  wrapper.querySelector(".fp-property-category").value = data.property_category || "primary";
-  wrapper.querySelector(".fp-mod-type").value = data.mod_type || "";
-
-  wrapper.querySelector(".remove-fixed-row-btn").addEventListener("click", () => {
-    wrapper.remove();
-  });
-
-  return wrapper;
 }
 
-function collectFixedRows(containerSelector) {
-  return Array.from(document.querySelectorAll(`${containerSelector} .fixed-row`)).map(box => {
-    const get = sel => box.querySelector(sel).value.trim();
-    const id = box.dataset.id || null;
-    const property_code = get(".fp-property-code");
-    const property_category = get(".fp-property-category");
-    const stat_name = get(".fp-stat-name");
-    const mod_type = get(".fp-mod-type");
-    const description_template = get(".fp-description-template");
-    const display_order = get(".fp-display-order");
-    const value_min = get(".fp-value-min");
-    const value_max = get(".fp-value-max");
-    const value2_min = get(".fp-value2-min");
-    const value2_max = get(".fp-value2-max");
+function createChoiceGroupHtml(prefix, group = {}, options = []) {
+  return `
+    <div class="repeater-item choice-group">
+      <div class="toolbar" style="justify-content:space-between;">
+        <strong>Choice Group</strong>
+        <div class="inline">
+          <button type="button" class="btn-secondary btn-small btn-add-option">+ Option</button>
+          <button type="button" class="btn-danger btn-small btn-remove-group">Gruppe entfernen</button>
+        </div>
+      </div>
 
-    if (!property_code || !property_category || !stat_name || !mod_type || !description_template) return null;
+      <div class="row">
+        <div class="field col-3">
+          <label>Group Code</label>
+          <input class="${prefix}_group_code" type="text" value="${escapeHtml(group.group_code || "")}" placeholder="z. B. shield_mainstat" />
+        </div>
+        <div class="field col-4">
+          <label>Display Label</label>
+          <input class="${prefix}_group_label" type="text" value="${escapeHtml(group.display_label || "")}" placeholder="Eine von 3 magischen Eigenschaften (variiert)" />
+        </div>
+        <div class="field col-2">
+          <label>Property Category</label>
+          <select class="${prefix}_group_property_category">
+            ${selectOptions(["primary","secondary","power","meta"], group.property_category || "primary")}
+          </select>
+        </div>
+        <div class="field col-1">
+          <label>Choose</label>
+          <input class="${prefix}_group_choose_count" type="number" min="1" value="${group.choose_count ?? 1}" />
+        </div>
+        <div class="field col-2">
+          <label>Display Order</label>
+          <input class="${prefix}_group_display_order" type="number" value="${group.display_order ?? 0}" />
+        </div>
+      </div>
 
-    return {
-      id,
-      property_code,
-      property_category,
-      stat_name,
-      mod_type,
-      value_min: value_min === "" ? null : Number(value_min),
-      value_max: value_max === "" ? null : Number(value_max),
-      value2_min: value2_min === "" ? null : Number(value2_min),
-      value2_max: value2_max === "" ? null : Number(value2_max),
-      description_template,
-      display_order: display_order === "" ? 10 : Number(display_order)
+      <div class="choice-options repeater-list">
+        ${options.map(opt => createChoiceOptionHtml(prefix, opt)).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function createChoiceOptionHtml(prefix, option = {}) {
+  return `
+    <div class="sub-block choice-option">
+      <div class="toolbar" style="justify-content:flex-end;">
+        <button type="button" class="btn-danger btn-small btn-remove-option">Option entfernen</button>
+      </div>
+
+      <div class="row">
+        <div class="field col-3">
+          <label>Option Code</label>
+          <input class="${prefix}_option_code" type="text" value="${escapeHtml(option.option_code || "")}" placeholder="z. B. mainstat_str" />
+        </div>
+        <div class="field col-3">
+          <label>Stat Name</label>
+          <input class="${prefix}_option_stat_name" type="text" value="${escapeHtml(option.stat_name || "")}" placeholder="z. B. strength" />
+        </div>
+        <div class="field col-3">
+          <label>Mod Type</label>
+          <select class="${prefix}_option_mod_type">
+            ${selectOptions(["flat","percent","percent_add","percent_mult","range","special"], option.mod_type || "flat")}
+          </select>
+        </div>
+        <div class="field col-3">
+          <label>Spawn Weight</label>
+          <input class="${prefix}_option_spawn_weight" type="number" min="1" value="${option.spawn_weight ?? 100}" />
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field col-3">
+          <label>Value Min</label>
+          <input class="${prefix}_option_value_min" type="number" step="0.01" value="${option.value_min ?? ""}" />
+        </div>
+        <div class="field col-3">
+          <label>Value Max</label>
+          <input class="${prefix}_option_value_max" type="number" step="0.01" value="${option.value_max ?? ""}" />
+        </div>
+        <div class="field col-3">
+          <label>Value2 Min</label>
+          <input class="${prefix}_option_value2_min" type="number" step="0.01" value="${option.value2_min ?? ""}" />
+        </div>
+        <div class="field col-3">
+          <label>Value2 Max</label>
+          <input class="${prefix}_option_value2_max" type="number" step="0.01" value="${option.value2_max ?? ""}" />
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field col-10">
+          <label>Description Template</label>
+          <input class="${prefix}_option_description_template" type="text" value="${escapeHtml(option.description_template || "")}" placeholder="+{value} Stärke" />
+        </div>
+        <div class="field col-2">
+          <label>Display Order</label>
+          <input class="${prefix}_option_display_order" type="number" value="${option.display_order ?? 0}" />
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function selectOptions(values, selected) {
+  return values.map(v => `<option value="${escapeHtml(v)}" ${v === selected ? "selected" : ""}>${escapeHtml(v)}</option>`).join("");
+}
+
+function bindRepeaterEvents(root) {
+  root.querySelectorAll(".btn-remove-fixed").forEach(btn => {
+    btn.onclick = () => btn.closest(".fixed-property").remove();
+  });
+
+  root.querySelectorAll(".btn-remove-group").forEach(btn => {
+    btn.onclick = () => btn.closest(".choice-group").remove();
+  });
+
+  root.querySelectorAll(".btn-add-option").forEach(btn => {
+    btn.onclick = () => {
+      const container = btn.closest(".choice-group").querySelector(".choice-options");
+      container.insertAdjacentHTML("beforeend", createChoiceOptionHtml("x"));
+      bindRepeaterEvents(container);
     };
-  }).filter(Boolean);
-}
-
-function createChoiceOptionRow(data = {}) {
-  const wrapper = document.createElement("div");
-  wrapper.className = "group-box choice-option-row";
-  wrapper.dataset.id = data.id || "";
-  wrapper.innerHTML = `
-    <div class="three-col">
-      <div>
-        <label>option_code</label>
-        <input class="co-option-code" value="${escapeHtml(data.option_code || "")}" />
-      </div>
-      <div>
-        <label>stat_name</label>
-        <input class="co-stat-name" value="${escapeHtml(data.stat_name || "")}" />
-      </div>
-      <div>
-        <label>mod_type</label>
-        <select class="co-mod-type">
-          <option value="">leer</option>
-          <option value="flat">flat</option>
-          <option value="percent">percent</option>
-          <option value="range">range</option>
-          <option value="special">special</option>
-        </select>
-      </div>
-
-      <div>
-        <label>value_min</label>
-        <input class="co-value-min" type="number" step="0.01" value="${data.value_min ?? ""}" />
-      </div>
-      <div>
-        <label>value_max</label>
-        <input class="co-value-max" type="number" step="0.01" value="${data.value_max ?? ""}" />
-      </div>
-      <div>
-        <label>display_order</label>
-        <input class="co-display-order" type="number" value="${data.display_order ?? ""}" />
-      </div>
-
-      <div>
-        <label>value2_min</label>
-        <input class="co-value2-min" type="number" step="0.01" value="${data.value2_min ?? ""}" />
-      </div>
-      <div>
-        <label>value2_max</label>
-        <input class="co-value2-max" type="number" step="0.01" value="${data.value2_max ?? ""}" />
-      </div>
-      <div>
-        <label>ID</label>
-        <input value="${escapeHtml(data.id || "")}" readonly />
-      </div>
-    </div>
-
-    <div style="margin-top: 12px;">
-      <label>description_template</label>
-      <textarea class="co-description-template">${escapeHtml(data.description_template || "")}</textarea>
-    </div>
-
-    <div class="inline-actions" style="margin-top: 12px;">
-      <button type="button" class="danger remove-choice-option-btn">Option entfernen</button>
-    </div>
-  `;
-
-  wrapper.querySelector(".co-mod-type").value = data.mod_type || "";
-
-  wrapper.querySelector(".remove-choice-option-btn").addEventListener("click", () => {
-    wrapper.remove();
   });
 
-  return wrapper;
+  root.querySelectorAll(".btn-remove-option").forEach(btn => {
+    btn.onclick = () => btn.closest(".choice-option").remove();
+  });
 }
 
-function createChoiceGroupRow(groupData = {}, optionRows = []) {
-  const wrapper = document.createElement("div");
-  wrapper.className = "section-box choice-group-row";
-  wrapper.dataset.id = groupData.id || "";
-  wrapper.innerHTML = `
-    <div class="three-col">
-      <div>
-        <label>group_code</label>
-        <input class="cg-group-code" value="${escapeHtml(groupData.group_code || "")}" />
-      </div>
-      <div>
-        <label>property_category</label>
-        <select class="cg-property-category">
-          <option value="primary">primary</option>
-          <option value="secondary">secondary</option>
-          <option value="power">power</option>
-        </select>
-      </div>
-      <div>
-        <label>display_order</label>
-        <input class="cg-display-order" type="number" value="${groupData.display_order ?? ""}" />
-      </div>
-    </div>
+// ---------- form collect ----------
+function collectBaseItemFromCreateForm(generatedItemCode) {
+  const itemType = $("create_item_type").value;
+  const equipSlot = $("create_equip_slot").value;
+  const tooltipArchetype = $("create_tooltip_archetype").value || inferTooltipArchetype(itemType, equipSlot);
+  const rarity = $("create_rarity").value;
+  const rarityLabel = parseNullableText($("create_rarity_label").value) || buildRarityLabelFallback(rarity, itemType, tooltipArchetype);
 
-    <div class="subtle" style="margin-top: 12px;">Choice Options</div>
-    <div class="choice-options-container"></div>
-
-    <div class="inline-actions" style="margin-top: 12px;">
-      <button type="button" class="secondary add-choice-option-btn">Option hinzufügen</button>
-      <button type="button" class="danger remove-choice-group-btn">Choice Group entfernen</button>
-    </div>
-  `;
-
-  wrapper.querySelector(".cg-property-category").value = groupData.property_category || "primary";
-
-  const optionsContainer = wrapper.querySelector(".choice-options-container");
-  if (optionRows.length > 0) {
-    optionRows.forEach(row => optionsContainer.appendChild(createChoiceOptionRow(row)));
-  }
-
-  wrapper.querySelector(".add-choice-option-btn").addEventListener("click", () => {
-    optionsContainer.appendChild(createChoiceOptionRow());
-  });
-
-  wrapper.querySelector(".remove-choice-group-btn").addEventListener("click", () => {
-    wrapper.remove();
-  });
-
-  return wrapper;
+  return {
+    item_code: generatedItemCode,
+    internal_name: makeDefaultInternalName(generatedItemCode),
+    display_name: $("create_display_name").value.trim(),
+    rarity,
+    item_type: itemType,
+    equip_slot: equipSlot || null,
+    level_requirement: parseNullableNumber($("create_level_requirement").value, true) ?? 1,
+    description: $("create_description").value.trim() || rarityLabel,
+    flavor_text: $("create_flavor_text").value.trim() || "",
+    transmog_code: null,
+    appearance_code: parseNullableText($("create_appearance_code").value) || generatedItemCode,
+    min_sockets: parseNullableNumber($("create_min_sockets").value, true) ?? 0,
+    max_sockets: parseNullableNumber($("create_max_sockets").value, true) ?? 0,
+    is_equippable: true,
+    is_stackable: false,
+    max_stack: 1,
+    inventory_width: 1,
+    inventory_height: 1,
+    icon_path: null,
+    mesh_path: null,
+    can_roll_primary_affixes: boolFromCheckbox("create_can_roll_primary_affixes"),
+    can_roll_secondary_affixes: boolFromCheckbox("create_can_roll_secondary_affixes"),
+    can_have_gems: boolFromCheckbox("create_can_have_gems"),
+    can_have_durability: true,
+    base_name: $("create_display_name").value.trim(),
+    rarity_label: rarityLabel,
+    source_type: $("create_source_type").value,
+    damage_min: parseNullableNumber($("create_damage_min").value, true),
+    damage_max: parseNullableNumber($("create_damage_max").value, true),
+    attacks_per_second: parseNullableNumber($("create_attacks_per_second").value, false),
+    armor_base: parseNullableNumber($("create_armor_base").value, true),
+    block_base: parseNullableNumber($("create_block_base").value, false),
+    random_primary_min: parseNullableNumber($("create_random_primary_min").value, true) ?? 0,
+    random_primary_max: parseNullableNumber($("create_random_primary_max").value, true) ?? 0,
+    random_secondary_min: parseNullableNumber($("create_random_secondary_min").value, true) ?? 0,
+    random_secondary_max: parseNullableNumber($("create_random_secondary_max").value, true) ?? 0,
+    item_set_code: parseNullableText($("create_item_set_code").value),
+    crafted_tier: parseNullableNumber($("create_crafted_tier").value, true),
+    binding_mode: $("create_binding_mode").value,
+    is_unique_equipped: boolFromCheckbox("create_is_unique_equipped"),
+    tooltip_archetype: tooltipArchetype
+  };
 }
 
-function collectChoiceGroupRows() {
-  return Array.from(document.querySelectorAll("#editChoiceGroupRows .choice-group-row")).map(groupBox => {
-    const get = sel => groupBox.querySelector(sel).value.trim();
-    const groupId = groupBox.dataset.id || null;
+function collectBaseItemFromEditForm() {
+  const itemType = $("edit_item_type").value;
+  const equipSlot = $("edit_equip_slot").value;
+  const tooltipArchetype = $("edit_tooltip_archetype").value || inferTooltipArchetype(itemType, equipSlot);
+  const rarity = $("edit_rarity").value;
+  const rarityLabel = parseNullableText($("edit_rarity_label").value) || buildRarityLabelFallback(rarity, itemType, tooltipArchetype);
 
-    const group_code = get(".cg-group-code");
-    const property_category = get(".cg-property-category");
-    const display_order = get(".cg-display-order");
+  return {
+    item_code: $("edit_item_code").value.trim(),
+    internal_name: $("edit_internal_name").value.trim(),
+    display_name: $("edit_display_name").value.trim(),
+    rarity,
+    item_type: itemType,
+    equip_slot: equipSlot || null,
+    level_requirement: parseNullableNumber($("edit_level_requirement").value, true) ?? 1,
+    description: $("edit_description").value.trim() || rarityLabel,
+    flavor_text: $("edit_flavor_text").value.trim() || "",
+    appearance_code: parseNullableText($("edit_appearance_code").value),
+    min_sockets: parseNullableNumber($("edit_min_sockets").value, true) ?? 0,
+    max_sockets: parseNullableNumber($("edit_max_sockets").value, true) ?? 0,
+    is_equippable: true,
+    is_stackable: false,
+    max_stack: 1,
+    inventory_width: 1,
+    inventory_height: 1,
+    icon_path: null,
+    mesh_path: null,
+    can_roll_primary_affixes: boolFromCheckbox("edit_can_roll_primary_affixes"),
+    can_roll_secondary_affixes: boolFromCheckbox("edit_can_roll_secondary_affixes"),
+    can_have_gems: boolFromCheckbox("edit_can_have_gems"),
+    can_have_durability: true,
+    base_name: $("edit_display_name").value.trim(),
+    rarity_label: rarityLabel,
+    source_type: $("edit_source_type").value,
+    damage_min: parseNullableNumber($("edit_damage_min").value, true),
+    damage_max: parseNullableNumber($("edit_damage_max").value, true),
+    attacks_per_second: parseNullableNumber($("edit_attacks_per_second").value, false),
+    armor_base: parseNullableNumber($("edit_armor_base").value, true),
+    block_base: parseNullableNumber($("edit_block_base").value, false),
+    random_primary_min: parseNullableNumber($("edit_random_primary_min").value, true) ?? 0,
+    random_primary_max: parseNullableNumber($("edit_random_primary_max").value, true) ?? 0,
+    random_secondary_min: parseNullableNumber($("edit_random_secondary_min").value, true) ?? 0,
+    random_secondary_max: parseNullableNumber($("edit_random_secondary_max").value, true) ?? 0,
+    item_set_code: parseNullableText($("edit_item_set_code").value),
+    crafted_tier: parseNullableNumber($("edit_crafted_tier").value, true),
+    binding_mode: $("edit_binding_mode").value,
+    is_unique_equipped: boolFromCheckbox("edit_is_unique_equipped"),
+    tooltip_archetype: tooltipArchetype
+  };
+}
 
-    if (!group_code || !property_category) return null;
+function collectFixedProperties(containerId) {
+  const list = [];
+  const items = $(containerId).querySelectorAll(".fixed-property");
 
-    const options = Array.from(groupBox.querySelectorAll(".choice-option-row")).map(optionBox => {
-      const og = sel => optionBox.querySelector(sel).value.trim();
-      const optionId = optionBox.dataset.id || null;
+  items.forEach((el, index) => {
+    const row = {
+      property_code: el.querySelector('[class$="_fixed_property_code"]').value.trim(),
+      property_category: el.querySelector('[class$="_fixed_property_category"]').value,
+      stat_name: parseNullableText(el.querySelector('[class$="_fixed_stat_name"]').value),
+      mod_type: el.querySelector('[class$="_fixed_mod_type"]').value,
+      value_min: parseNullableNumber(el.querySelector('[class$="_fixed_value_min"]').value, false),
+      value_max: parseNullableNumber(el.querySelector('[class$="_fixed_value_max"]').value, false),
+      value2_min: parseNullableNumber(el.querySelector('[class$="_fixed_value2_min"]').value, false),
+      value2_max: parseNullableNumber(el.querySelector('[class$="_fixed_value2_max"]').value, false),
+      description_template: el.querySelector('[class$="_fixed_description_template"]').value.trim(),
+      display_order: parseNullableNumber(el.querySelector('[class$="_fixed_display_order"]').value, true) ?? ((index + 1) * 10),
+      is_always_present: el.querySelector('[class$="_fixed_is_always_present"]').checked
+    };
 
-      const option_code = og(".co-option-code");
-      const stat_name = og(".co-stat-name");
-      const mod_type = og(".co-mod-type");
-      const description_template = og(".co-description-template");
-      const value_min = og(".co-value-min");
-      const value_max = og(".co-value-max");
-      const value2_min = og(".co-value2-min");
-      const value2_max = og(".co-value2-max");
-      const option_display_order = og(".co-display-order");
+    const hasContent =
+      row.property_code ||
+      row.stat_name ||
+      row.description_template ||
+      row.value_min !== null ||
+      row.value_max !== null ||
+      row.value2_min !== null ||
+      row.value2_max !== null;
 
-      if (!option_code || !stat_name || !mod_type || !description_template) return null;
+    if (hasContent) list.push(row);
+  });
 
-      return {
-        id: optionId,
-        option_code,
-        stat_name,
-        mod_type,
-        value_min: value_min === "" ? null : Number(value_min),
-        value_max: value_max === "" ? null : Number(value_max),
-        value2_min: value2_min === "" ? null : Number(value2_min),
-        value2_max: value2_max === "" ? null : Number(value2_max),
-        description_template,
-        display_order: option_display_order === "" ? 10 : Number(option_display_order)
+  return list;
+}
+
+function collectChoiceGroups(containerId) {
+  const result = [];
+  const groups = $(containerId).querySelectorAll(".choice-group");
+
+  groups.forEach((groupEl, groupIndex) => {
+    const group = {
+      group_code: groupEl.querySelector('[class$="_group_code"]').value.trim(),
+      display_label: groupEl.querySelector('[class$="_group_label"]').value.trim(),
+      property_category: groupEl.querySelector('[class$="_group_property_category"]').value,
+      choose_count: parseNullableNumber(groupEl.querySelector('[class$="_group_choose_count"]').value, true) ?? 1,
+      display_order: parseNullableNumber(groupEl.querySelector('[class$="_group_display_order"]').value, true) ?? ((groupIndex + 1) * 10),
+      options: []
+    };
+
+    const optionEls = groupEl.querySelectorAll(".choice-option");
+    optionEls.forEach((optEl, optionIndex) => {
+      const opt = {
+        option_code: optEl.querySelector('[class$="_option_code"]').value.trim(),
+        stat_name: parseNullableText(optEl.querySelector('[class$="_option_stat_name"]').value),
+        mod_type: optEl.querySelector('[class$="_option_mod_type"]').value,
+        value_min: parseNullableNumber(optEl.querySelector('[class$="_option_value_min"]').value, false),
+        value_max: parseNullableNumber(optEl.querySelector('[class$="_option_value_max"]').value, false),
+        value2_min: parseNullableNumber(optEl.querySelector('[class$="_option_value2_min"]').value, false),
+        value2_max: parseNullableNumber(optEl.querySelector('[class$="_option_value2_max"]').value, false),
+        description_template: optEl.querySelector('[class$="_option_description_template"]').value.trim(),
+        spawn_weight: parseNullableNumber(optEl.querySelector('[class$="_option_spawn_weight"]').value, true) ?? 100,
+        display_order: parseNullableNumber(optEl.querySelector('[class$="_option_display_order"]').value, true) ?? ((optionIndex + 1) * 10)
       };
-    }).filter(Boolean);
 
-    return {
-      id: groupId,
-      group_code,
-      property_category,
-      display_order: display_order === "" ? 10 : Number(display_order),
-      options
-    };
-  }).filter(Boolean);
-}
+      const hasContent =
+        opt.option_code ||
+        opt.stat_name ||
+        opt.description_template ||
+        opt.value_min !== null ||
+        opt.value_max !== null ||
+        opt.value2_min !== null ||
+        opt.value2_max !== null;
 
-async function login() {
-  try {
-    const client = getClient();
-    const email = document.getElementById("loginEmail").value.trim();
-    const password = document.getElementById("loginPassword").value;
-    const { data, error } = await client.auth.signInWithPassword({ email, password });
-    if (error) throw error;
-
-    showLoggedIn(data.user);
-    setMsg("authMsg", "Login erfolgreich.", "success");
-    await loadItems();
-  } catch (err) {
-    setMsg("authMsg", err.message || String(err), "error");
-  }
-}
-
-async function checkSession() {
-  try {
-    const client = getClient();
-    const { data, error } = await client.auth.getUser();
-    if (error) throw error;
-
-    if (data.user) {
-      showLoggedIn(data.user);
-      setMsg("authMsg", "Session gefunden.", "success");
-      await loadItems();
-    } else {
-      showLoggedOut();
-      setMsg("authMsg", "Keine aktive Session gefunden.", "muted");
-    }
-  } catch (err) {
-    setMsg("authMsg", err.message || String(err), "error");
-  }
-}
-
-async function logout() {
-  try {
-    const client = getClient();
-    const { error } = await client.auth.signOut();
-    if (error) throw error;
-    showLoggedOut();
-    setMsg("authMsg", "Ausgeloggt.", "muted");
-  } catch (err) {
-    alert(err.message || String(err));
-  }
-}
-
-async function loadItems() {
-  try {
-    const client = getClient();
-    setMsg("listMsg", "Lade Items ...", "muted");
-
-    let query = client.from("items").select("*").order("id", { ascending: false }).limit(300);
-
-    const itemCode = document.getElementById("filterItemCode").value.trim();
-    const displayName = document.getElementById("filterDisplayName").value.trim();
-    const rarity = document.getElementById("filterRarity").value.trim();
-    const itemType = document.getElementById("filterItemType").value.trim();
-
-    if (itemCode) query = query.ilike("item_code", `%${itemCode}%`);
-    if (displayName) query = query.ilike("display_name", `%${displayName}%`);
-    if (rarity) query = query.eq("rarity", rarity);
-    if (itemType) query = query.ilike("item_type", `%${itemType}%`);
-
-    const { data, error } = await query;
-    if (error) throw error;
-
-    const tbody = document.querySelector("#itemsTable tbody");
-    tbody.innerHTML = "";
-
-    for (const row of data) {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${row.id ?? ""}</td>
-        <td><button type="button" class="item-row-btn" data-id="${row.id}">${escapeHtml(row.item_code ?? "")}</button></td>
-        <td>${escapeHtml(row.display_name ?? "")}</td>
-        <td>${escapeHtml(row.rarity ?? "")}</td>
-        <td>${escapeHtml(row.item_type ?? "")}</td>
-        <td>${escapeHtml(row.equip_slot ?? "")}</td>
-        <td><button type="button" class="secondary edit-row-btn" data-id="${row.id}">Bearbeiten</button></td>
-      `;
-      tbody.appendChild(tr);
-    }
-
-    document.querySelectorAll(".item-row-btn, .edit-row-btn").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        await loadItemById(btn.dataset.id);
-        activateTab("tab-edit");
-      });
+      if (hasContent) {
+        group.options.push(opt);
+      }
     });
 
-    setMsg("listMsg", `${data.length} Items geladen.`, "success");
+    const groupHasContent = group.group_code || group.display_label || group.options.length > 0;
+    if (groupHasContent) result.push(group);
+  });
+
+  return result;
+}
+
+// ---------- item code ----------
+async function generateUniqueItemCode(displayName, itemType) {
+  const base = toSlug(displayName);
+  const typePart = toSlug(itemType || "item");
+  const prefix = `${typePart}_${base}`;
+
+  const { data, error } = await supabaseClient
+    .from("items")
+    .select("item_code")
+    .ilike("item_code", `${prefix}%`);
+
+  if (error) throw error;
+
+  const codes = (data || []).map(r => r.item_code);
+  if (!codes.includes(prefix)) return prefix;
+
+  let i = 1;
+  while (codes.includes(`${prefix}_${String(i).padStart(3, "0")}`)) {
+    i++;
+  }
+
+  return `${prefix}_${String(i).padStart(3, "0")}`;
+}
+
+async function refreshCreateAutoFields() {
+  try {
+    const displayName = $("create_display_name").value.trim();
+    const itemType = $("create_item_type").value;
+    const mapping = state.itemTypeMap.get(itemType);
+
+    $("create_equip_slot").value = mapping?.equip_slot || "";
+    $("create_item_code_preview").value = "";
+    $("create_internal_name").value = "";
+
+    if (!displayName || !itemType) return;
+
+    const code = await generateUniqueItemCode(displayName, itemType);
+    $("create_item_code_preview").value = code;
+    $("create_internal_name").value = code;
   } catch (err) {
-    setMsg("listMsg", err.message || String(err), "error");
+    showStatus(`Auto item_code konnte nicht berechnet werden:\n${err.message}`, "error");
   }
 }
 
-async function createItem(event) {
-  event.preventDefault();
-  try {
-    const client = getClient();
-    setMsg("createMsg", "Speichere Item ...", "muted");
+function refreshEditDerivedFields() {
+  const itemType = $("edit_item_type").value;
+  const mapping = state.itemTypeMap.get(itemType);
+  $("edit_equip_slot").value = mapping?.equip_slot || "";
+}
 
-    const displayName = document.getElementById("create_display_name").value.trim();
-    const itemType = document.getElementById("create_item_type").value.trim();
-    const itemCode = buildAutoItemCode(displayName, itemType);
-    const meta = ITEM_TYPE_META[itemType] || {};
+// ---------- save / update / delete ----------
+async function insertItemWithChildren(baseItem, fixedRows, choiceGroups) {
+  const { data: insertedItem, error: itemError } = await supabaseClient
+    .from("items")
+    .insert(baseItem)
+    .select("id")
+    .single();
 
-    if (!displayName) throw new Error("display_name fehlt.");
-    if (!itemType) throw new Error("item_type fehlt.");
-    if (!itemCode) throw new Error("item_code konnte nicht erzeugt werden.");
+  if (itemError) throw itemError;
 
-    const payload = formToPayload(document.getElementById("createItemForm"));
-    payload.item_code = itemCode;
-    if (meta.equip_slot) payload.equip_slot = meta.equip_slot;
-    if (meta.tooltip_archetype) payload.tooltip_archetype = meta.tooltip_archetype;
-    if (!payload.binding_mode) payload.binding_mode = "tradable";
+  const itemId = insertedItem.id;
 
-    const { data: insertedItems, error: itemError } = await client
-      .from("items")
-      .insert([payload])
-      .select();
-
-    if (itemError) throw itemError;
-    const itemRow = insertedItems[0];
-    const itemId = itemRow.id;
-
-    const fixedPrimaryRows = collectFixedRows("#fixedPrimaryRows").map(row => ({
+  if (fixedRows.length > 0) {
+    const payload = fixedRows.map(row => ({
       item_id: itemId,
       property_code: row.property_code,
       property_category: row.property_category,
@@ -642,486 +917,458 @@ async function createItem(event) {
       value2_min: row.value2_min,
       value2_max: row.value2_max,
       description_template: row.description_template,
-      display_order: row.display_order
+      display_order: row.display_order,
+      is_always_present: row.is_always_present
     }));
 
-    const powerTemplate = document.getElementById("power_description_template").value.trim();
-    const powerValueMin = document.getElementById("power_value_min").value.trim();
-    const powerValueMax = document.getElementById("power_value_max").value.trim();
-
-    if (powerTemplate) {
-      fixedPrimaryRows.push({
-        item_id: itemId,
-        property_code: `${itemCode}_power`,
-        property_category: "power",
-        stat_name: "legendary_power",
-        mod_type: "special",
-        value_min: powerValueMin === "" ? null : Number(powerValueMin),
-        value_max: powerValueMax === "" ? null : Number(powerValueMax),
-        value2_min: null,
-        value2_max: null,
-        description_template: powerTemplate,
-        display_order: 10
-      });
-    }
-
-    if (fixedPrimaryRows.length > 0) {
-      const { error: fixedError } = await client
-        .from("item_fixed_properties")
-        .insert(fixedPrimaryRows);
-      if (fixedError) throw fixedError;
-    }
-
-    const mainstatValueMin = document.getElementById("mainstat_value_min").value.trim();
-    const mainstatValueMax = document.getElementById("mainstat_value_max").value.trim();
-
-    if (mainstatValueMin || mainstatValueMax) {
-      const groupCode = `${itemCode}_mainstat`;
-      const { data: insertedGroups, error: groupError } = await client
-        .from("item_choice_groups")
-        .insert([{
-          item_id: itemId,
-          group_code: groupCode,
-          property_category: "primary",
-          display_order: 100
-        }])
-        .select();
-
-      if (groupError) throw groupError;
-      const choiceGroupId = insertedGroups[0].id;
-
-      const choiceOptions = [
-        {
-          choice_group_id: choiceGroupId,
-          option_code: "mainstat_str",
-          stat_name: "strength",
-          mod_type: "flat",
-          value_min: mainstatValueMin === "" ? null : Number(mainstatValueMin),
-          value_max: mainstatValueMax === "" ? null : Number(mainstatValueMax),
-          value2_min: null,
-          value2_max: null,
-          description_template: "+{value} Stärke",
-          display_order: 10
-        },
-        {
-          choice_group_id: choiceGroupId,
-          option_code: "mainstat_dex",
-          stat_name: "dexterity",
-          mod_type: "flat",
-          value_min: mainstatValueMin === "" ? null : Number(mainstatValueMin),
-          value_max: mainstatValueMax === "" ? null : Number(mainstatValueMax),
-          value2_min: null,
-          value2_max: null,
-          description_template: "+{value} Geschicklichkeit",
-          display_order: 20
-        },
-        {
-          choice_group_id: choiceGroupId,
-          option_code: "mainstat_int",
-          stat_name: "intelligence",
-          mod_type: "flat",
-          value_min: mainstatValueMin === "" ? null : Number(mainstatValueMin),
-          value_max: mainstatValueMax === "" ? null : Number(mainstatValueMax),
-          value2_min: null,
-          value2_max: null,
-          description_template: "+{value} Intelligenz",
-          display_order: 30
-        }
-      ];
-
-      const { error: optionError } = await client
-        .from("item_choice_group_options")
-        .insert(choiceOptions);
-
-      if (optionError) throw optionError;
-    }
-
-    setMsg("createMsg", `Item erfolgreich gespeichert.\n\nID: ${itemId}\nitem_code: ${itemCode}`, "success");
-    resetCreateForm();
-    await loadItems();
-    activateTab("tab-list");
-  } catch (err) {
-    setMsg("createMsg", err.message || String(err), "error");
-  }
-}
-
-async function loadItemForEdit() {
-  try {
-    const client = getClient();
-    const itemCode = document.getElementById("editLookupItemCode").value.trim();
-    if (!itemCode) throw new Error("Bitte item_code eingeben.");
-
-    const { data, error } = await client
-      .from("items")
-      .select("*")
-      .eq("item_code", itemCode)
-      .order("id", { ascending: false })
-      .limit(1);
-
+    const { error } = await supabaseClient.from("item_fixed_properties").insert(payload);
     if (error) throw error;
-    if (!data || data.length === 0) throw new Error("Kein Item gefunden.");
-
-    await loadItemById(data[0].id);
-  } catch (err) {
-    setMsg("editMsg", err.message || String(err), "error");
   }
-}
 
-async function loadItemById(id) {
-  try {
-    const client = getClient();
-
-    const { data, error } = await client
-      .from("items")
-      .select("*")
-      .eq("id", id)
-      .limit(1);
-
-    if (error) throw error;
-    if (!data || data.length === 0) throw new Error("Kein Item gefunden.");
-
-    const row = data[0];
-    loadedEditItemId = row.id;
-    fillForm(document.getElementById("editItemForm"), row);
-
-    const { data: fixedProps, error: fixedError } = await client
-      .from("item_fixed_properties")
-      .select("*")
-      .eq("item_id", row.id)
-      .order("property_category", { ascending: true })
-      .order("display_order", { ascending: true });
-
-    if (fixedError) throw fixedError;
-
-    const { data: choiceGroups, error: groupError } = await client
+  for (const group of choiceGroups) {
+    const { data: insertedGroup, error: groupError } = await supabaseClient
       .from("item_choice_groups")
-      .select("*")
-      .eq("item_id", row.id)
-      .order("display_order", { ascending: true });
+      .insert({
+        item_id: itemId,
+        group_code: group.group_code,
+        display_label: group.display_label || group.group_code,
+        property_category: group.property_category,
+        choose_count: group.choose_count,
+        display_order: group.display_order
+      })
+      .select("id")
+      .single();
 
     if (groupError) throw groupError;
 
-    let allOptions = [];
-    if (choiceGroups.length > 0) {
-      const groupIds = choiceGroups.map(g => g.id);
-      const { data: options, error: optionError } = await client
+    if (group.options.length > 0) {
+      const optionPayload = group.options.map(opt => ({
+        choice_group_id: insertedGroup.id,
+        option_code: opt.option_code,
+        stat_name: opt.stat_name,
+        mod_type: opt.mod_type,
+        value_min: opt.value_min,
+        value_max: opt.value_max,
+        value2_min: opt.value2_min,
+        value2_max: opt.value2_max,
+        description_template: opt.description_template,
+        spawn_weight: opt.spawn_weight,
+        display_order: opt.display_order
+      }));
+
+      const { error: optionError } = await supabaseClient
         .from("item_choice_group_options")
-        .select("*")
-        .in("choice_group_id", groupIds)
-        .order("display_order", { ascending: true });
+        .insert(optionPayload);
 
       if (optionError) throw optionError;
-      allOptions = options;
-    }
-
-    const fixedContainer = document.getElementById("editFixedRows");
-    fixedContainer.innerHTML = "";
-    fixedProps.forEach(fp => fixedContainer.appendChild(createFixedPrimaryRow(fp)));
-
-    const groupContainer = document.getElementById("editChoiceGroupRows");
-    groupContainer.innerHTML = "";
-    choiceGroups.forEach(group => {
-      const groupOptions = allOptions.filter(o => o.choice_group_id === group.id);
-      groupContainer.appendChild(createChoiceGroupRow(group, groupOptions));
-    });
-
-    setMsg("editMsg", `Item geladen: ${row.item_code}`, "success");
-  } catch (err) {
-    setMsg("editMsg", err.message || String(err), "error");
-  }
-}
-
-async function saveFixedProperties(client, itemId) {
-  const rows = collectFixedRows("#editFixedRows");
-
-  const { data: existingRows, error: existingError } = await client
-    .from("item_fixed_properties")
-    .select("id")
-    .eq("item_id", itemId);
-
-  if (existingError) throw existingError;
-
-  const existingIds = new Set(existingRows.map(r => String(r.id)));
-  const incomingIds = new Set(rows.filter(r => r.id).map(r => String(r.id)));
-
-  const idsToDelete = [...existingIds].filter(id => !incomingIds.has(id));
-  if (idsToDelete.length > 0) {
-    const { error: deleteError } = await client
-      .from("item_fixed_properties")
-      .delete()
-      .in("id", idsToDelete);
-    if (deleteError) throw deleteError;
-  }
-
-  for (const row of rows) {
-    const payload = {
-      item_id: itemId,
-      property_code: row.property_code,
-      property_category: row.property_category,
-      stat_name: row.stat_name,
-      mod_type: row.mod_type,
-      value_min: row.value_min,
-      value_max: row.value_max,
-      value2_min: row.value2_min,
-      value2_max: row.value2_max,
-      description_template: row.description_template,
-      display_order: row.display_order
-    };
-
-    if (row.id) {
-      const { error: updateError } = await client
-        .from("item_fixed_properties")
-        .update(payload)
-        .eq("id", row.id);
-      if (updateError) throw updateError;
-    } else {
-      const { error: insertError } = await client
-        .from("item_fixed_properties")
-        .insert([payload]);
-      if (insertError) throw insertError;
     }
   }
+
+  return itemId;
 }
 
-async function saveChoiceGroupsAndOptions(client, itemId) {
-  const rows = collectChoiceGroupRows();
-
-  const { data: existingGroups, error: groupsFetchError } = await client
+async function replaceItemChildren(itemId, fixedRows, choiceGroups) {
+  // choice options -> groups -> fixed -> then reinsert
+  const { data: oldGroups, error: oldGroupsError } = await supabaseClient
     .from("item_choice_groups")
     .select("id")
     .eq("item_id", itemId);
 
-  if (groupsFetchError) throw groupsFetchError;
+  if (oldGroupsError) throw oldGroupsError;
 
-  const existingGroupIds = new Set(existingGroups.map(g => String(g.id)));
-  const incomingGroupIds = new Set(rows.filter(g => g.id).map(g => String(g.id)));
-  const groupIdsToDelete = [...existingGroupIds].filter(id => !incomingGroupIds.has(id));
+  const oldGroupIds = (oldGroups || []).map(g => g.id);
 
-  if (groupIdsToDelete.length > 0) {
-    const { error: deleteOptionsError } = await client
+  if (oldGroupIds.length > 0) {
+    const { error: deleteOptionsError } = await supabaseClient
       .from("item_choice_group_options")
       .delete()
-      .in("choice_group_id", groupIdsToDelete);
+      .in("choice_group_id", oldGroupIds);
+
     if (deleteOptionsError) throw deleteOptionsError;
-
-    const { error: deleteGroupsError } = await client
-      .from("item_choice_groups")
-      .delete()
-      .in("id", groupIdsToDelete);
-    if (deleteGroupsError) throw deleteGroupsError;
   }
 
-  for (const group of rows) {
-    const groupPayload = {
+  const { error: deleteGroupsError } = await supabaseClient
+    .from("item_choice_groups")
+    .delete()
+    .eq("item_id", itemId);
+
+  if (deleteGroupsError) throw deleteGroupsError;
+
+  const { error: deleteFixedError } = await supabaseClient
+    .from("item_fixed_properties")
+    .delete()
+    .eq("item_id", itemId);
+
+  if (deleteFixedError) throw deleteFixedError;
+
+  if (fixedRows.length > 0) {
+    const payload = fixedRows.map(row => ({
       item_id: itemId,
-      group_code: group.group_code,
-      property_category: group.property_category,
-      display_order: group.display_order
-    };
+      property_code: row.property_code,
+      property_category: row.property_category,
+      stat_name: row.stat_name,
+      mod_type: row.mod_type,
+      value_min: row.value_min,
+      value_max: row.value_max,
+      value2_min: row.value2_min,
+      value2_max: row.value2_max,
+      description_template: row.description_template,
+      display_order: row.display_order,
+      is_always_present: row.is_always_present
+    }));
 
-    let choiceGroupId = group.id;
+    const { error } = await supabaseClient.from("item_fixed_properties").insert(payload);
+    if (error) throw error;
+  }
 
-    if (group.id) {
-      const { error: updateGroupError } = await client
-        .from("item_choice_groups")
-        .update(groupPayload)
-        .eq("id", group.id);
-      if (updateGroupError) throw updateGroupError;
-    } else {
-      const { data: insertedGroup, error: insertGroupError } = await client
-        .from("item_choice_groups")
-        .insert([groupPayload])
-        .select();
-      if (insertGroupError) throw insertGroupError;
-      choiceGroupId = insertedGroup[0].id;
-    }
-
-    const { data: existingOptions, error: optionsFetchError } = await client
-      .from("item_choice_group_options")
+  for (const group of choiceGroups) {
+    const { data: insertedGroup, error: groupError } = await supabaseClient
+      .from("item_choice_groups")
+      .insert({
+        item_id: itemId,
+        group_code: group.group_code,
+        display_label: group.display_label || group.group_code,
+        property_category: group.property_category,
+        choose_count: group.choose_count,
+        display_order: group.display_order
+      })
       .select("id")
-      .eq("choice_group_id", choiceGroupId);
+      .single();
 
-    if (optionsFetchError) throw optionsFetchError;
+    if (groupError) throw groupError;
 
-    const existingOptionIds = new Set(existingOptions.map(o => String(o.id)));
-    const incomingOptionIds = new Set(group.options.filter(o => o.id).map(o => String(o.id)));
-    const optionIdsToDelete = [...existingOptionIds].filter(id => !incomingOptionIds.has(id));
+    if (group.options.length > 0) {
+      const optionPayload = group.options.map(opt => ({
+        choice_group_id: insertedGroup.id,
+        option_code: opt.option_code,
+        stat_name: opt.stat_name,
+        mod_type: opt.mod_type,
+        value_min: opt.value_min,
+        value_max: opt.value_max,
+        value2_min: opt.value2_min,
+        value2_max: opt.value2_max,
+        description_template: opt.description_template,
+        spawn_weight: opt.spawn_weight,
+        display_order: opt.display_order
+      }));
 
-    if (optionIdsToDelete.length > 0) {
-      const { error: deleteOptionError } = await client
+      const { error: optionError } = await supabaseClient
         .from("item_choice_group_options")
-        .delete()
-        .in("id", optionIdsToDelete);
-      if (deleteOptionError) throw deleteOptionError;
-    }
+        .insert(optionPayload);
 
-    for (const option of group.options) {
-      const optionPayload = {
-        choice_group_id: choiceGroupId,
-        option_code: option.option_code,
-        stat_name: option.stat_name,
-        mod_type: option.mod_type,
-        value_min: option.value_min,
-        value_max: option.value_max,
-        value2_min: option.value2_min,
-        value2_max: option.value2_max,
-        description_template: option.description_template,
-        display_order: option.display_order
-      };
-
-      if (option.id) {
-        const { error: updateOptionError } = await client
-          .from("item_choice_group_options")
-          .update(optionPayload)
-          .eq("id", option.id);
-        if (updateOptionError) throw updateOptionError;
-      } else {
-        const { error: insertOptionError } = await client
-          .from("item_choice_group_options")
-          .insert([optionPayload]);
-        if (insertOptionError) throw insertOptionError;
-      }
+      if (optionError) throw optionError;
     }
   }
 }
 
-async function updateItem(event) {
-  event.preventDefault();
+async function createItem() {
+  clearStatus();
   try {
-    const client = getClient();
-    if (!loadedEditItemId) throw new Error("Kein Item geladen.");
+    if (!isAllowedUser()) {
+      throw new Error("Du bist nicht für dieses Tool freigeschaltet.");
+    }
 
-    const form = document.getElementById("editItemForm");
-    const payload = formToPayload(form);
-    delete payload.id;
+    const displayName = $("create_display_name").value.trim();
+    const itemType = $("create_item_type").value;
 
-    const { error: itemUpdateError } = await client
-      .from("items")
-      .update(payload)
-      .eq("id", loadedEditItemId);
+    if (!displayName) throw new Error("Display Name fehlt.");
+    if (!itemType) throw new Error("Item Type fehlt.");
 
-    if (itemUpdateError) throw itemUpdateError;
+    const itemCode = $("create_item_code_preview").value.trim() || await generateUniqueItemCode(displayName, itemType);
 
-    await saveFixedProperties(client, loadedEditItemId);
-    await saveChoiceGroupsAndOptions(client, loadedEditItemId);
+    const baseItem = collectBaseItemFromCreateForm(itemCode);
+    const fixedRows = collectFixedProperties("createFixedList");
+    const choiceGroups = collectChoiceGroups("createChoiceGroupList");
 
-    setMsg("editMsg", "Item und Kinddaten erfolgreich gespeichert.", "success");
-    await loadItems();
-    await loadItemById(loadedEditItemId);
+    await insertItemWithChildren(baseItem, fixedRows, choiceGroups);
+    await loadItemsForList();
+    resetCreateForm();
+
+    showStatus(`Item erfolgreich angelegt:\n${itemCode}`, "ok");
+    setTab("tab-list");
   } catch (err) {
-    setMsg("editMsg", err.message || String(err), "error");
+    showStatus(`Item anlegen fehlgeschlagen:\n${err.message}`, "error");
   }
 }
 
-async function deleteItemWithChildren() {
+async function updateItem() {
+  clearStatus();
   try {
-    const client = getClient();
+    if (!isAllowedUser()) {
+      throw new Error("Du bist nicht für dieses Tool freigeschaltet.");
+    }
 
-    if (!loadedEditItemId) throw new Error("Kein Item geladen.");
-    const ok = window.confirm("Dieses Item inklusive item_fixed_properties, item_choice_groups und item_choice_group_options wirklich löschen?");
+    const itemId = parseInt($("edit_item_id").value, 10);
+    if (!itemId) throw new Error("Keine Item-ID geladen.");
+
+    const baseItem = collectBaseItemFromEditForm();
+    if (!baseItem.display_name) throw new Error("Display Name fehlt.");
+    if (!baseItem.item_code) throw new Error("Item Code fehlt.");
+    if (!baseItem.item_type) throw new Error("Item Type fehlt.");
+
+    const fixedRows = collectFixedProperties("editFixedList");
+    const choiceGroups = collectChoiceGroups("editChoiceGroupList");
+
+    const { error: updateError } = await supabaseClient
+      .from("items")
+      .update(baseItem)
+      .eq("id", itemId);
+
+    if (updateError) throw updateError;
+
+    await replaceItemChildren(itemId, fixedRows, choiceGroups);
+    await loadItemsForList();
+    await openEditItem(itemId);
+
+    showStatus(`Item erfolgreich aktualisiert:\n${baseItem.item_code}`, "ok");
+  } catch (err) {
+    showStatus(`Item aktualisieren fehlgeschlagen:\n${err.message}`, "error");
+  }
+}
+
+async function deleteCurrentItem() {
+  clearStatus();
+  try {
+    if (!isAllowedUser()) {
+      throw new Error("Du bist nicht für dieses Tool freigeschaltet.");
+    }
+
+    const itemId = parseInt($("edit_item_id").value, 10);
+    const itemCode = $("edit_item_code").value.trim();
+
+    if (!itemId) throw new Error("Keine Item-ID geladen.");
+
+    const ok = confirm(`Willst du dieses Item wirklich löschen?\n\n${itemCode}`);
     if (!ok) return;
 
-    const { data: groups, error: groupFetchError } = await client
+    const { data: oldGroups, error: oldGroupsError } = await supabaseClient
       .from("item_choice_groups")
       .select("id")
-      .eq("item_id", loadedEditItemId);
+      .eq("item_id", itemId);
 
-    if (groupFetchError) throw groupFetchError;
+    if (oldGroupsError) throw oldGroupsError;
 
-    const groupIds = groups.map(g => g.id);
+    const oldGroupIds = (oldGroups || []).map(g => g.id);
 
-    if (groupIds.length > 0) {
-      const { error: deleteOptionsError } = await client
+    if (oldGroupIds.length > 0) {
+      const { error: deleteOptionsError } = await supabaseClient
         .from("item_choice_group_options")
         .delete()
-        .in("choice_group_id", groupIds);
+        .in("choice_group_id", oldGroupIds);
+
       if (deleteOptionsError) throw deleteOptionsError;
     }
 
-    const { error: deleteGroupsError } = await client
+    const { error: deleteGroupsError } = await supabaseClient
       .from("item_choice_groups")
       .delete()
-      .eq("item_id", loadedEditItemId);
+      .eq("item_id", itemId);
+
     if (deleteGroupsError) throw deleteGroupsError;
 
-    const { error: deleteFixedError } = await client
+    const { error: deleteFixedError } = await supabaseClient
       .from("item_fixed_properties")
       .delete()
-      .eq("item_id", loadedEditItemId);
+      .eq("item_id", itemId);
+
     if (deleteFixedError) throw deleteFixedError;
 
-    const { error: deleteItemError } = await client
+    const { error: deleteItemError } = await supabaseClient
       .from("items")
       .delete()
-      .eq("id", loadedEditItemId);
+      .eq("id", itemId);
+
     if (deleteItemError) throw deleteItemError;
 
-    loadedEditItemId = null;
-    document.getElementById("editItemForm").reset();
-    document.getElementById("editFixedRows").innerHTML = "";
-    document.getElementById("editChoiceGroupRows").innerHTML = "";
+    $("editForm").classList.add("hidden");
+    $("editHint").textContent = "Wähle links ein Item aus.";
+    state.currentEditItem = null;
 
-    setMsg("editMsg", "Item inklusive Kinder-Daten gelöscht.", "success");
-    await loadItems();
-    activateTab("tab-list");
+    await loadItemsForList();
+    showStatus(`Item gelöscht:\n${itemCode}`, "ok");
   } catch (err) {
-    setMsg("editMsg", err.message || String(err), "error");
+    showStatus(`Item löschen fehlgeschlagen:\n${err.message}`, "error");
   }
 }
 
-function wireCreateLivePreview() {
-  [
-    "create_display_name",
-    "create_item_type",
-    "create_armor_min",
-    "create_armor_max",
-    "create_damage_min",
-    "create_damage_max",
-    "create_attacks_per_second"
-  ].forEach(id => {
-    document.getElementById(id).addEventListener("input", updateAutoFields);
-    document.getElementById(id).addEventListener("change", updateAutoFields);
-  });
-}
-
+// ---------- fill / reset ----------
 function resetCreateForm() {
-  document.getElementById("createItemForm").reset();
-  document.getElementById("fixedPrimaryRows").innerHTML = "";
-  document.getElementById("create_binding_mode").value = "tradable";
-  document.getElementById("mainstat_value_min").value = "626";
-  document.getElementById("mainstat_value_max").value = "750";
-  updateAutoFields();
-  setMsg("createMsg", "", "muted");
+  $("createForm").reset();
+  $("create_binding_mode").value = "tradable";
+  $("create_source_type").value = "drop";
+  $("create_min_sockets").value = 0;
+  $("create_max_sockets").value = 0;
+  $("create_random_primary_min").value = 0;
+  $("create_random_primary_max").value = 0;
+  $("create_random_secondary_min").value = 0;
+  $("create_random_secondary_max").value = 0;
+  $("create_item_code_preview").value = "";
+  $("create_internal_name").value = "";
+  $("create_equip_slot").value = "";
+  $("createFixedList").innerHTML = "";
+  $("createChoiceGroupList").innerHTML = "";
 }
 
-document.querySelectorAll(".tab-btn").forEach(btn => {
-  btn.addEventListener("click", () => activateTab(btn.dataset.tab));
-});
+function fillEditForm(payload) {
+  const item = payload.item;
 
-document.getElementById("loginBtn").addEventListener("click", login);
-document.getElementById("checkSessionBtn").addEventListener("click", checkSession);
-document.getElementById("logoutBtn").addEventListener("click", logout);
-document.getElementById("refreshItemsBtn").addEventListener("click", loadItems);
+  $("edit_item_id").value = item.id;
+  $("edit_display_name").value = item.display_name || "";
+  $("edit_rarity").value = item.rarity || "normal";
+  $("edit_item_type").value = item.item_type || "";
+  $("edit_item_code").value = item.item_code || "";
+  $("edit_internal_name").value = item.internal_name || "";
+  $("edit_equip_slot").value = item.equip_slot || "";
+  $("edit_tooltip_archetype").value = item.tooltip_archetype || "";
+  $("edit_level_requirement").value = item.level_requirement ?? 1;
+  $("edit_binding_mode").value = item.binding_mode || "tradable";
+  $("edit_source_type").value = item.source_type || "drop";
+  $("edit_crafted_tier").value = item.crafted_tier ?? "";
+  $("edit_damage_min").value = item.damage_min ?? "";
+  $("edit_damage_max").value = item.damage_max ?? "";
+  $("edit_attacks_per_second").value = item.attacks_per_second ?? "";
+  $("edit_armor_base").value = item.armor_base ?? "";
+  $("edit_block_base").value = item.block_base ?? "";
+  $("edit_min_sockets").value = item.min_sockets ?? 0;
+  $("edit_max_sockets").value = item.max_sockets ?? 0;
+  $("edit_rarity_label").value = item.rarity_label || "";
+  $("edit_random_primary_min").value = item.random_primary_min ?? 0;
+  $("edit_random_primary_max").value = item.random_primary_max ?? 0;
+  $("edit_random_secondary_min").value = item.random_secondary_min ?? 0;
+  $("edit_random_secondary_max").value = item.random_secondary_max ?? 0;
+  $("edit_item_set_code").value = item.item_set_code || "";
+  $("edit_appearance_code").value = item.appearance_code || "";
+  $("edit_description").value = item.description || "";
+  $("edit_flavor_text").value = item.flavor_text || "";
 
-document.getElementById("createItemForm").addEventListener("submit", createItem);
-document.getElementById("resetCreateBtn").addEventListener("click", resetCreateForm);
-document.getElementById("addFixedPrimaryBtn").addEventListener("click", () => {
-  document.getElementById("fixedPrimaryRows").appendChild(createFixedPrimaryRow({ property_category: "primary", display_order: 10 }));
-});
+  setCheckbox("edit_is_unique_equipped", item.is_unique_equipped);
+  setCheckbox("edit_can_have_gems", item.can_have_gems);
+  setCheckbox("edit_can_roll_primary_affixes", item.can_roll_primary_affixes);
+  setCheckbox("edit_can_roll_secondary_affixes", item.can_roll_secondary_affixes);
 
-document.getElementById("loadItemForEditBtn").addEventListener("click", loadItemForEdit);
-document.getElementById("editItemForm").addEventListener("submit", updateItem);
-document.getElementById("deleteItemBtn").addEventListener("click", deleteItemWithChildren);
+  $("editFixedList").innerHTML = "";
+  payload.fixedRows.forEach(row => {
+    $("editFixedList").insertAdjacentHTML("beforeend", createFixedPropertyHtml("e", row));
+  });
 
-document.getElementById("addEditFixedBtn").addEventListener("click", () => {
-  document.getElementById("editFixedRows").appendChild(createFixedPrimaryRow({ property_category: "primary", display_order: 10 }));
-});
+  $("editChoiceGroupList").innerHTML = "";
+  payload.groups.forEach(group => {
+    const groupOptions = payload.options.filter(opt => opt.choice_group_id === group.id);
+    $("editChoiceGroupList").insertAdjacentHTML("beforeend", createChoiceGroupHtml("e", group, groupOptions));
+  });
 
-document.getElementById("addEditChoiceGroupBtn").addEventListener("click", () => {
-  document.getElementById("editChoiceGroupRows").appendChild(createChoiceGroupRow({ property_category: "primary", display_order: 100 }, []));
-});
+  bindRepeaterEvents($("editFixedList"));
+  bindRepeaterEvents($("editChoiceGroupList"));
+}
 
-initDefaults();
-wireCreateLivePreview();
-resetCreateForm();
-checkSession();
+// ---------- event wiring ----------
+function wireUi() {
+  $("btnLogin").addEventListener("click", login);
+  $("btnLogout").addEventListener("click", logout);
+
+  document.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.addEventListener("click", () => setTab(btn.dataset.tab));
+  });
+
+  const debouncedCreateAuto = debounce(refreshCreateAutoFields, 250);
+
+  $("create_display_name").addEventListener("input", debouncedCreateAuto);
+  $("create_item_type").addEventListener("change", debouncedCreateAuto);
+
+  $("edit_item_type").addEventListener("change", refreshEditDerivedFields);
+
+  $("btnAddCreateFixed").addEventListener("click", () => {
+    $("createFixedList").insertAdjacentHTML("beforeend", createFixedPropertyHtml("c"));
+    bindRepeaterEvents($("createFixedList"));
+  });
+
+  $("btnAddCreateChoiceGroup").addEventListener("click", () => {
+    $("createChoiceGroupList").insertAdjacentHTML("beforeend", createChoiceGroupHtml("c"));
+    bindRepeaterEvents($("createChoiceGroupList"));
+  });
+
+  $("btnAddEditFixed").addEventListener("click", () => {
+    $("editFixedList").insertAdjacentHTML("beforeend", createFixedPropertyHtml("e"));
+    bindRepeaterEvents($("editFixedList"));
+  });
+
+  $("btnAddEditChoiceGroup").addEventListener("click", () => {
+    $("editChoiceGroupList").insertAdjacentHTML("beforeend", createChoiceGroupHtml("e"));
+    bindRepeaterEvents($("editChoiceGroupList"));
+  });
+
+  $("btnCreateReset").addEventListener("click", resetCreateForm);
+
+  $("createForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    await createItem();
+  });
+
+  $("editForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    await updateItem();
+  });
+
+  $("btnDeleteItem").addEventListener("click", deleteCurrentItem);
+
+  $("list_search").addEventListener("input", renderItemList);
+  $("list_filter_rarity").addEventListener("change", renderItemList);
+  $("list_filter_type").addEventListener("change", renderItemList);
+  $("btnReloadList").addEventListener("click", loadItemsForList);
+
+  $("edit_search").addEventListener("input", debounce(renderEditItemList, 150));
+}
+
+// ---------- app init ----------
+async function initAppAfterAuth() {
+  await getSessionAndProfile();
+
+  if (!state.user) {
+    $("authCard").classList.remove("hidden");
+    $("appShell").classList.add("hidden");
+    return;
+  }
+
+  if (!state.profile) {
+    $("authCard").classList.remove("hidden");
+    $("appShell").classList.add("hidden");
+    throw new Error("Kein Profil für diesen Benutzer gefunden.");
+  }
+
+  if (!isAllowedUser()) {
+    $("authCard").classList.add("hidden");
+    $("appShell").classList.add("hidden");
+    throw new Error(`Dieser Benutzer darf das Tool nicht verwenden.\n\nErlaubt ist nur Profil-ID:\n${ALLOWED_PROFILE_ID}`);
+  }
+
+  $("authCard").classList.add("hidden");
+  $("appShell").classList.remove("hidden");
+  $("whoami").textContent = state.user.email || state.user.id;
+  $("profileInfo").textContent = `${state.profile.display_name} (${state.profile.id})`;
+
+  await loadReferenceData();
+  await loadItemsForList();
+  await refreshCreateAutoFields();
+}
+
+async function init() {
+  wireUi();
+
+  supabaseClient.auth.onAuthStateChange(async () => {
+    try {
+      await initAppAfterAuth();
+    } catch (err) {
+      showStatus(err.message, "error");
+    }
+  });
+
+  try {
+    await initAppAfterAuth();
+  } catch (err) {
+    if (state.user) {
+      showStatus(err.message, "error");
+    }
+  }
+}
+
+init();
