@@ -211,7 +211,8 @@ function renderTooltipPreview(targetId, previewData) {
 
   target.innerHTML = `
     ${lines.join("")}
-    <div class="preview-meta">
+    <div class="preview-debug-box">
+      <strong>Vorschau-Daten</strong><br>
       item_type: ${escapeHtml(previewData.item_type || "-")}<br>
       equip_slot: ${escapeHtml(previewData.equip_slot || "-")}<br>
       tooltip_archetype: ${escapeHtml(previewData.tooltip_archetype || "-")}
@@ -220,10 +221,60 @@ function renderTooltipPreview(targetId, previewData) {
 }
 
 function getPreviewBaseLabel(baseItem) {
-  return (
-    baseItem.rarity_label ||
-    buildRarityLabelFallback(baseItem.rarity, baseItem.item_type, baseItem.tooltip_archetype)
-  );
+  if (baseItem.rarity_label && baseItem.rarity_label.trim()) {
+    return baseItem.rarity_label.trim();
+  }
+
+  const rarityMap = {
+    normal: "",
+    magic: "Magischer",
+    rare: "Seltener",
+    legendary: "Legendärer",
+    unique: "Einzigartiger",
+    unreal: "Unwirklicher"
+  };
+
+  const typeMap = {
+    sword_1h: "Schwert",
+    sword_2h: "Zweihandschwert",
+    axe_1h: "Axt",
+    dagger: "Dolch",
+    mace_1h: "Streitkolben",
+    spear: "Speer",
+    polearm: "Stangenwaffe",
+    staff: "Stab",
+    wand: "Zauberstab",
+    bow: "Bogen",
+    crossbow: "Armbrust",
+    hand_crossbow: "Handarmbrust",
+    shield: "Schild",
+    crusader_shield: "Kreuzritterschild",
+    orb: "Kugel",
+    quiver: "Köcher",
+    book: "Buch",
+    helmet: "Kopfschutz",
+    soulstone: "Kraftstein",
+    mask: "Maske",
+    hat: "Hut",
+    shoulder_armor: "Schulterpanzer",
+    chest_armor: "Brustrüstung",
+    cloak: "Umhang",
+    bracer: "Armschiene",
+    gloves: "Handschuhe",
+    belt: "Gürtel",
+    mighty_belt: "Mächtiger Gürtel",
+    pants: "Hose",
+    boots: "Stiefel",
+    ring: "Ring",
+    amulet: "Amulett",
+    backpack: "Rückenslot",
+    artifact: "Artefakt"
+  };
+
+  const rarityPrefix = rarityMap[baseItem.rarity] || "";
+  const typeLabel = typeMap[baseItem.item_type] || baseItem.item_type || "Gegenstand";
+
+  return rarityPrefix ? `${rarityPrefix} ${typeLabel}` : typeLabel;
 }
 
 function buildPreviewHeaderLines(baseItem) {
