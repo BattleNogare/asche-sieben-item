@@ -2,25 +2,133 @@ const SUPABASE_URL = "https://nnwmjwprfofihhbutcff.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ud21qd3ByZm9maWhoYnV0Y2ZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MTcyNzMsImV4cCI6MjA4ODk5MzI3M30.RM4EDjvjWN2R7IVfz-4GdhSIfQI4N0NescFshkHxWZ4";
 const ALLOWED_PROFILE_ID = "b934eac7-aae5-4ec2-abb7-d67d7dbdabad";
 
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); 
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const state = {
   session: null,
   user: null,
   profile: null,
-  itemTypeMap: new Map(),     // item_type -> { equip_slot, sort_order }
-  itemTypes: [],
-  classRules: [],
-  classes: [],
-  allItems: [],
-  editItems: [],
-  currentEditItem: null
+  items: [],
+  equipSlots: [],
+  equipSlotItemTypes: [],
+  affixDefinitions: [],
+  affixAllowedByType: new Map(),
+  itemTypeToSlot: new Map(),
+  itemTypeEntries: [],
+  editCurrentItem: null,
+  editCurrentFixed: [],
+  editCurrentGroups: []
 };
-console.log("app.js geladen");
-console.log("Supabase Client:", supabaseClient);
-console.log("Supabase URL raw:", SUPABASE_URL);
-console.log("Anon Key Länge:", SUPABASE_ANON_KEY ? SUPABASE_ANON_KEY.length : 0);
-// ---------- helpers ----------
+
+const ITEM_STRUCTURE = {
+  "Waffen": {
+    "Einhand": [
+      { label: "Axt", item_type: "axe_1h" },
+      { label: "Dolch", item_type: "dagger" },
+      { label: "Streitkolben", item_type: "mace_1h" },
+      { label: "Speer", item_type: "spear" },
+      { label: "Schwert", item_type: "sword_1h" },
+      { label: "Zeremonienmesser (nur für Scion)", item_type: "ceremonial_knife" },
+      { label: "Faustwaffe (nur für Rogue)", item_type: "fist_weapon" },
+      { label: "Flegel (nur für Crusader)", item_type: "flail_1h" },
+      { label: "Mächtige Waffe (nur für Berserker)", item_type: "mighty_weapon_1h" },
+      { label: "Sense (nur für Necromancer)", item_type: "scythe_1h" }
+    ],
+    "Zweihand": [
+      { label: "Streitkolben", item_type: "mace_2h" },
+      { label: "Stangenwaffe", item_type: "polearm" },
+      { label: "Stab", item_type: "staff" },
+      { label: "Schwert", item_type: "sword_2h" },
+      { label: "Flegel (nur für Crusader)", item_type: "flail_2h" },
+      { label: "Mächtige Waffe (nur für Berserker)", item_type: "mighty_weapon_2h" },
+      { label: "Sense (nur für Necromancer)", item_type: "scythe_2h" }
+    ],
+    "Distanzwaffen": [
+      { label: "Bogen", item_type: "bow" },
+      { label: "Armbrust", item_type: "crossbow" },
+      { label: "Handarmbrust (nur für Ranger)", item_type: "hand_crossbow" },
+      { label: "Zauberstäbe (nur für Mage)", item_type: "wand" }
+    ]
+  },
+  "Rüstung": {
+    "Head": [
+      { label: "Helm", item_type: "helmet" },
+      { label: "Kraftstein (nur für Necromancer)", item_type: "soulstone" },
+      { label: "Maske (nur für Rogue)", item_type: "mask" },
+      { label: "Hut (nur für Mage)", item_type: "hat" }
+    ],
+    "Shoulders": [
+      { label: "Schulterpanzer", item_type: "shoulder_armor" }
+    ],
+    "Chest": [
+      { label: "Brustrüstung", item_type: "chest_armor" },
+      { label: "Umhang", item_type: "cloak" }
+    ],
+    "Sleeve": [
+      { label: "Armschiene", item_type: "bracer" }
+    ],
+    "Hand": [
+      { label: "Handschuhe", item_type: "gloves" }
+    ],
+    "Belt": [
+      { label: "Gürtel", item_type: "belt" },
+      { label: "Mächtiger Gürtel (nur für Berserker)", item_type: "mighty_belt" }
+    ],
+    "Legs": [
+      { label: "Hose", item_type: "pants" }
+    ],
+    "Feet": [
+      { label: "Stiefel", item_type: "boots" }
+    ]
+  },
+  "Schmuck": {
+    "Amulett": [
+      { label: "Amulett", item_type: "amulet" }
+    ],
+    "Ring": [
+      { label: "Ring", item_type: "ring" }
+    ]
+  },
+  "Weapon Off": {
+    "Schild": [
+      { label: "Schild", item_type: "shield" }
+    ],
+    "Kreuzritterschild (nur für Crusader)": [
+      { label: "Kreuzritterschild (nur für Crusader)", item_type: "crusader_shield" }
+    ],
+    "Kugel (nur für Mage)": [
+      { label: "Kugel (nur für Mage)", item_type: "orb" }
+    ],
+    "Köcher (nur für Ranger)": [
+      { label: "Köcher (nur für Ranger)", item_type: "quiver" }
+    ],
+    "Buch (nur für Necromancer)": [
+      { label: "Buch (nur für Necromancer)", item_type: "book" }
+    ]
+  },
+  "Backpack": {
+    "Rückenslot": [
+      { label: "Rückenslot", item_type: "backpack" }
+    ]
+  },
+  "Artifact": {
+    "Artefakt": [
+      { label: "Artefakt", item_type: "artifact" }
+    ]
+  },
+  "Begleiter-Special": {
+    "Fokus (nur für Begleiter 1)": [
+      { label: "Fokus (nur für Begleiter 1)", item_type: "companion_focus" }
+    ],
+    "Marke (nur für Begleiter 2)": [
+      { label: "Marke (nur für Begleiter 2)", item_type: "companion_mark" }
+    ],
+    "Relikt (nur für Begleiter 3)": [
+      { label: "Relikt (nur für Begleiter 3)", item_type: "companion_relic" }
+    ]
+  }
+};
+
 function $(id) {
   return document.getElementById(id);
 }
@@ -33,112 +141,54 @@ function showStatus(message, type = "info") {
 }
 
 function clearStatus() {
-  $("statusBox").classList.add("hidden");
+  const box = $("statusBox");
+  box.textContent = "";
+  box.className = "status info hidden";
 }
 
-function setTab(tabId) {
-  document.querySelectorAll(".tab-panel").forEach(el => el.classList.add("hidden"));
-  document.querySelectorAll(".tab-btn").forEach(el => el.classList.remove("active"));
-
-  $(tabId).classList.remove("hidden");
-  document.querySelector(`.tab-btn[data-tab="${tabId}"]`)?.classList.add("active");
+function debounce(fn, wait = 150) {
+  let t = null;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...args), wait);
+  };
 }
 
-function toSlug(value) {
-  return (value || "")
-    .toLowerCase()
-    .trim()
-    .replace(/ä/g, "ae")
-    .replace(/ö/g, "oe")
-    .replace(/ü/g, "ue")
-    .replace(/ß/g, "ss")
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .replace(/_+/g, "_");
-}
-
-function inferTooltipArchetype(itemType, equipSlot) {
-  const weaponMain = [
-    "axe_1h", "dagger", "mace_1h", "spear", "sword_1h", "ceremonial_knife",
-    "fist_weapon", "flail_1h", "mighty_weapon_1h", "scythe_1h", "mace_2h",
-    "polearm", "staff", "sword_2h", "flail_2h", "mighty_weapon_2h",
-    "scythe_2h", "bow", "crossbow", "hand_crossbow", "wand"
-  ];
-
-  const armorTypes = [
-    "helmet", "soulstone", "mask", "hat", "shoulder_armor", "chest_armor",
-    "cloak", "bracer", "gloves", "belt", "mighty_belt", "pants", "boots"
-  ];
-
-  const jewelryTypes = ["amulet", "ring"];
-  const offhandTypes = ["shield", "crusader_shield", "orb", "quiver", "book"];
-
-  if (weaponMain.includes(itemType)) return "weapon";
-  if (armorTypes.includes(itemType)) return "armor";
-  if (jewelryTypes.includes(itemType)) return "jewelry";
-  if (offhandTypes.includes(itemType)) return "offhand";
-  if (itemType === "backpack") return "backpack";
-  if (itemType === "artifact") return "artifact";
-
-  if (equipSlot === "weapon_main") return "weapon";
-  if (equipSlot === "weapon_off") return "offhand";
-  if (["head", "shoulders", "chest", "sleeve", "hand", "belt", "legs", "feet"].includes(equipSlot)) return "armor";
-  if (["amulet", "ring_left", "ring_right"].includes(equipSlot)) return "jewelry";
-  if (equipSlot === "backpack") return "backpack";
-  if (equipSlot === "artifact") return "artifact";
-
-  return "special";
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 function parseNullableNumber(value, integer = false) {
-  if (value === "" || value === null || value === undefined) return null;
-  const n = integer ? parseInt(value, 10) : parseFloat(value);
-  return Number.isNaN(n) ? null : n;
+  if (value === null || value === undefined || value === "") return null;
+  const num = integer ? parseInt(value, 10) : parseFloat(value);
+  return Number.isNaN(num) ? null : num;
 }
 
-function parseNullableText(value) {
-  const v = (value || "").trim();
-  return v === "" ? null : v;
+function slugify(input) {
+  return String(input || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ß/g, "ss")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
 }
 
-function boolFromCheckbox(id) {
-  return $(id).checked;
-}
-
-function setCheckbox(id, value) {
-  $(id).checked = !!value;
-}
-
-function buildRarityLabelFallback(rarity, itemType, archetype) {
-  const rarityMap = {
-    normal: "",
-    magic: "Magischer",
-    rare: "Seltener",
-    legendary: "Legendärer",
-    unique: "Einzigartiger",
-    unreal: "Unwirklicher"
-  };
-
-  const baseMap = {
-    weapon: "Waffe",
-    armor: "Rüstung",
-    offhand: "Nebenhand",
-    jewelry: "Schmuck",
-    backpack: "Rückenslot",
-    artifact: "Artefakt",
-    special: "Gegenstand"
-  };
-
-  const prefix = rarityMap[rarity] || "";
-  const base = baseMap[archetype] || itemType || "Gegenstand";
-  return prefix ? `${prefix} ${base}` : base;
+function titleCase(text) {
+  return String(text || "")
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, c => c.toUpperCase());
 }
 
 function formatPreviewNumber(value, decimals = 0) {
   if (value === null || value === undefined || value === "") return null;
   const num = Number(value);
   if (Number.isNaN(num)) return null;
-
   return num.toLocaleString("de-DE", {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals
@@ -153,86 +203,15 @@ function buildPreviewRarityClass(rarity) {
   return "rarity-normal";
 }
 
-function renderTooltipPreview(targetId, previewData) {
-  const target = $(targetId);
-  if (!target) return;
-
-  if (!previewData) {
-    target.innerHTML = `<div class="preview-hint">Keine Vorschau verfügbar.</div>`;
-    return;
-  }
-
-  const rarityClass = buildPreviewRarityClass(previewData.rarity);
-  const lines = [];
-
-  lines.push(`
-    <div class="tooltip-preview-title ${rarityClass}">
-      ${escapeHtml(previewData.display_name || "Unbenanntes Item")}
-    </div>
-  `);
-
-  if (previewData.rarity_label) {
-    lines.push(`<div class="tooltip-line ${rarityClass}">${escapeHtml(previewData.rarity_label)}</div>`);
-  }
-
-  if (previewData.header_lines?.length) {
-    previewData.header_lines.forEach(line => {
-      lines.push(`<div class="tooltip-line">${escapeHtml(line)}</div>`);
-    });
-  }
-
-  if (previewData.primary_lines?.length) {
-    lines.push(`<div class="tooltip-section-label">Primär</div>`);
-    previewData.primary_lines.forEach(line => {
-      lines.push(`<div class="tooltip-line">${escapeHtml(line)}</div>`);
-    });
-  }
-
-  if (previewData.secondary_lines?.length) {
-    lines.push(`<div class="tooltip-section-label">Sekundär</div>`);
-    previewData.secondary_lines.forEach(line => {
-      lines.push(`<div class="tooltip-line">${escapeHtml(line)}</div>`);
-    });
-  }
-
-  if (previewData.power_lines?.length) {
-    lines.push(`<div class="tooltip-section-label tooltip-power">Macht</div>`);
-    previewData.power_lines.forEach(line => {
-      lines.push(`<div class="tooltip-line tooltip-power">${escapeHtml(line)}</div>`);
-    });
-  }
-
-  if (previewData.footer_lines?.length) {
-    lines.push(`<div class="tooltip-divider"></div>`);
-    previewData.footer_lines.forEach(line => {
-      lines.push(`<div class="tooltip-line tooltip-footer">${escapeHtml(line)}</div>`);
-    });
-  }
-
-  target.innerHTML = `
-    ${lines.join("")}
-    <div class="preview-debug-box">
-      <strong>Vorschau-Daten</strong><br>
-      item_type: ${escapeHtml(previewData.item_type || "-")}<br>
-      equip_slot: ${escapeHtml(previewData.equip_slot || "-")}<br>
-      tooltip_archetype: ${escapeHtml(previewData.tooltip_archetype || "-")}
-    </div>
-  `;
-}
-
-function getPreviewBaseLabel(baseItem) {
-  if (baseItem.rarity_label && baseItem.rarity_label.trim()) {
-    return baseItem.rarity_label.trim();
-  }
-
-  const rarityMap = {
+function buildRarityLabelFallback(rarity, itemType) {
+  const prefix = {
     normal: "",
     magic: "Magischer",
     rare: "Seltener",
     legendary: "Legendärer",
     unique: "Einzigartiger",
     unreal: "Unwirklicher"
-  };
+  }[rarity] || "";
 
   const typeMap = {
     sword_1h: "Schwert",
@@ -240,13 +219,14 @@ function getPreviewBaseLabel(baseItem) {
     axe_1h: "Axt",
     dagger: "Dolch",
     mace_1h: "Streitkolben",
+    mace_2h: "Zweihand-Streitkolben",
     spear: "Speer",
     polearm: "Stangenwaffe",
     staff: "Stab",
-    wand: "Zauberstab",
     bow: "Bogen",
     crossbow: "Armbrust",
     hand_crossbow: "Handarmbrust",
+    wand: "Zauberstab",
     shield: "Schild",
     crusader_shield: "Kreuzritterschild",
     orb: "Kugel",
@@ -265,21 +245,550 @@ function getPreviewBaseLabel(baseItem) {
     mighty_belt: "Mächtiger Gürtel",
     pants: "Hose",
     boots: "Stiefel",
-    ring: "Ring",
     amulet: "Amulett",
+    ring: "Ring",
     backpack: "Rückenslot",
-    artifact: "Artefakt"
+    artifact: "Artefakt",
+    companion_focus: "Fokus",
+    companion_mark: "Marke",
+    companion_relic: "Relikt"
   };
 
-  const rarityPrefix = rarityMap[baseItem.rarity] || "";
-  const typeLabel = typeMap[baseItem.item_type] || baseItem.item_type || "Gegenstand";
+  const label = typeMap[itemType] || itemType || "Gegenstand";
+  return prefix ? `${prefix} ${label}` : label;
+}
 
-  return rarityPrefix ? `${rarityPrefix} ${typeLabel}` : typeLabel;
+function inferTooltipArchetype(itemType, equipSlot, family) {
+  if (family === "Waffen") return "weapon";
+  if (family === "Rüstung") return "armor";
+  if (family === "Schmuck") return "jewelry";
+  if (equipSlot === "weapon_off") return "offhand";
+  if (itemType === "backpack") return "backpack";
+  if (itemType === "artifact") return "artifact";
+  return "";
+}
+
+function isAllowedUser() {
+  return state.user?.id === ALLOWED_PROFILE_ID || state.profile?.id === ALLOWED_PROFILE_ID;
+}
+
+function getFamilyOfItemType(itemType) {
+  for (const [family, subMap] of Object.entries(ITEM_STRUCTURE)) {
+    for (const [subfamily, entries] of Object.entries(subMap)) {
+      if (entries.some(e => e.item_type === itemType)) {
+        return { family, subfamily };
+      }
+    }
+  }
+  return { family: "", subfamily: "" };
+}
+
+async function generateUniqueItemCode(displayName, itemType, existingItemId = null) {
+  const base = `${slugify(itemType)}_${slugify(displayName)}`.replace(/^_+|_+$/g, "");
+  let code = base || `item_${Date.now()}`;
+
+  let tries = 0;
+  while (tries < 100) {
+    let query = supabaseClient
+      .from("items")
+      .select("id", { count: "exact", head: true })
+      .eq("item_code", code);
+
+    if (existingItemId) {
+      query = query.neq("id", existingItemId);
+    }
+
+    const { count, error } = await query;
+    if (error) throw error;
+    if (!count) return code;
+
+    tries += 1;
+    code = `${base}_${tries + 1}`;
+  }
+
+  return `${base}_${Date.now()}`;
+}
+
+async function getSessionAndProfile() {
+  const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
+  if (sessionError) throw sessionError;
+
+  state.session = sessionData.session;
+  state.user = sessionData.session?.user || null;
+
+  if (!state.user) {
+    state.profile = null;
+    return;
+  }
+
+  const { data: profile, error: profileError } = await supabaseClient
+    .from("profiles")
+    .select("*")
+    .eq("id", state.user.id)
+    .maybeSingle();
+
+  if (profileError) throw profileError;
+  state.profile = profile || null;
+}
+
+async function loadReferenceData() {
+  const [
+    equipSlotItemTypesRes,
+    affixesRes
+  ] = await Promise.all([
+    supabaseClient.from("equip_slot_item_types").select("*").order("sort_order"),
+    supabaseClient.from("affix_definitions").select("*").eq("is_enabled", true).order("sort_order")
+  ]);
+
+  if (equipSlotItemTypesRes.error) throw equipSlotItemTypesRes.error;
+  if (affixesRes.error) throw affixesRes.error;
+
+  state.equipSlotItemTypes = equipSlotItemTypesRes.data || [];
+  state.affixDefinitions = affixesRes.data || [];
+
+  state.itemTypeToSlot = new Map();
+  state.equipSlotItemTypes.forEach(row => {
+    state.itemTypeToSlot.set(row.item_type, row.equip_slot);
+  });
+
+  const { data: allowedRows, error: allowedErr } = await supabaseClient
+    .from("affix_definition_item_types")
+    .select("affix_definition_id,item_type");
+
+  if (allowedErr) throw allowedErr;
+
+  state.affixAllowedByType = new Map();
+  for (const row of allowedRows || []) {
+    if (!state.affixAllowedByType.has(row.item_type)) {
+      state.affixAllowedByType.set(row.item_type, new Set());
+    }
+    state.affixAllowedByType.get(row.item_type).add(row.affix_definition_id);
+  }
+
+  populateListTypeFilter();
+  populateFamilySelectors("create");
+  populateFamilySelectors("edit");
+}
+
+function populateListTypeFilter() {
+  const select = $("list_filter_item_type");
+  select.innerHTML = `<option value="">alle</option>`;
+  const types = [...new Set(state.equipSlotItemTypes.map(r => r.item_type))].sort();
+  types.forEach(type => {
+    const opt = document.createElement("option");
+    opt.value = type;
+    opt.textContent = type;
+    select.appendChild(opt);
+  });
+}
+
+function populateFamilySelectors(prefix) {
+  const familySelect = $(`${prefix}_item_family`);
+  const subfamilySelect = $(`${prefix}_item_subfamily`);
+  const typeSelect = $(`${prefix}_item_type`);
+
+  familySelect.innerHTML = "";
+  Object.keys(ITEM_STRUCTURE).forEach(family => {
+    const opt = document.createElement("option");
+    opt.value = family;
+    opt.textContent = family;
+    familySelect.appendChild(opt);
+  });
+
+  function fillSubfamilies() {
+    const family = familySelect.value;
+    subfamilySelect.innerHTML = "";
+    Object.keys(ITEM_STRUCTURE[family] || {}).forEach(sub => {
+      const opt = document.createElement("option");
+      opt.value = sub;
+      opt.textContent = sub;
+      subfamilySelect.appendChild(opt);
+    });
+    fillTypes();
+  }
+
+  function fillTypes() {
+    const family = familySelect.value;
+    const sub = subfamilySelect.value;
+    typeSelect.innerHTML = "";
+    const entries = ITEM_STRUCTURE[family]?.[sub] || [];
+    entries.forEach(entry => {
+      const opt = document.createElement("option");
+      opt.value = entry.item_type;
+      opt.textContent = entry.label;
+      typeSelect.appendChild(opt);
+    });
+    if (prefix === "create") {
+      refreshCreateDerivedFields();
+    } else {
+      refreshEditDerivedFields();
+    }
+  }
+
+  familySelect.onchange = fillSubfamilies;
+  subfamilySelect.onchange = fillTypes;
+  typeSelect.onchange = prefix === "create" ? refreshCreateDerivedFields : refreshEditDerivedFields;
+
+  fillSubfamilies();
+}
+
+function getSelectedFamily(prefix) {
+  return $(`${prefix}_item_family`).value;
+}
+
+function getSelectedItemType(prefix) {
+  return $(`${prefix}_item_type`).value;
+}
+
+function getAffixesAllowedForCurrentItemType(itemType, category = null, search = "") {
+  const allowedIds = state.affixAllowedByType.get(itemType) || new Set();
+  const q = search.trim().toLowerCase();
+
+  return state.affixDefinitions.filter(def => {
+    if (!allowedIds.has(def.id)) return false;
+    if (category && def.affix_category !== category) return false;
+    if (!q) return true;
+    return (
+      String(def.affix_code || "").toLowerCase().includes(q) ||
+      String(def.stat_name || "").toLowerCase().includes(q) ||
+      String(def.description_template || "").toLowerCase().includes(q)
+    );
+  });
+}
+
+function createAffixModuleHtml(prefix, moduleId, data = null) {
+  const always = data?.is_always_present ? "checked" : "";
+  return `
+    <div class="module-box affix-module" data-module-id="${moduleId}">
+      <div class="row">
+        <div class="field col-3">
+          <label>Typ</label>
+          <select class="affix-module-kind">
+            <option value="fixed" ${!data || data.kind === "fixed" ? "selected" : ""}>Fester Affix</option>
+            <option value="random_fill" ${data?.kind === "random_fill" ? "selected" : ""}>Random-Fill Modul</option>
+            <option value="choice_group" ${data?.kind === "choice_group" ? "selected" : ""}>Choice Group</option>
+          </select>
+        </div>
+        <div class="field col-2">
+          <label>Kategorie</label>
+          <select class="affix-property-category">
+            <option value="primary" ${data?.property_category === "primary" || !data ? "selected" : ""}>primary</option>
+            <option value="secondary" ${data?.property_category === "secondary" ? "selected" : ""}>secondary</option>
+          </select>
+        </div>
+        <div class="field col-2">
+          <label>Immer vorhanden</label>
+          <select class="affix-is-always-present">
+            <option value="true" ${always ? "selected" : ""}>ja</option>
+            <option value="false" ${!always ? "selected" : ""}>nein</option>
+          </select>
+        </div>
+        <div class="field col-3">
+          <label>Suche Affix</label>
+          <input class="affix-search" type="text" placeholder="suchen..." />
+        </div>
+        <div class="field col-2">
+          <label>&nbsp;</label>
+          <button type="button" class="btn-remove-affix-module btn-danger btn-small">Modul löschen</button>
+        </div>
+      </div>
+
+      <div class="module-fixed-block">
+        <div class="row">
+          <div class="field col-12">
+            <label>Affix auswählen</label>
+            <select class="affix-select"></select>
+          </div>
+        </div>
+      </div>
+
+      <div class="module-random-fill-block hidden">
+        <div class="row">
+          <div class="field col-4">
+            <label>Beschreibung</label>
+            <input class="random-fill-description" type="text" value="${escapeHtml(data?.display_label || "+1 zufällige magische Eigenschaft")}" />
+          </div>
+          <div class="field col-2">
+            <label>Anzahl</label>
+            <input class="random-fill-count" type="number" min="1" value="${data?.choose_count ?? 1}" />
+          </div>
+          <div class="field col-2">
+            <label>Display Order</label>
+            <input class="random-fill-order" type="number" min="1" value="${data?.display_order ?? 10}" />
+          </div>
+        </div>
+      </div>
+
+      <div class="module-choice-group-block hidden">
+        <div class="row">
+          <div class="field col-4">
+            <label>Gruppen-Label</label>
+            <input class="choice-group-label" type="text" value="${escapeHtml(data?.display_label || "Eine von X magischen Eigenschaften (variiert)")}" />
+          </div>
+          <div class="field col-2">
+            <label>Choose Count</label>
+            <input class="choice-group-choose-count" type="number" min="1" value="${data?.choose_count ?? 1}" />
+          </div>
+          <div class="field col-2">
+            <label>Display Order</label>
+            <input class="choice-group-order" type="number" min="1" value="${data?.display_order ?? 100}" />
+          </div>
+          <div class="field col-4">
+            <label>&nbsp;</label>
+            <button type="button" class="btn-add-choice-option btn-secondary btn-small">+ Option</button>
+          </div>
+        </div>
+        <div class="choice-options-list"></div>
+      </div>
+    </div>
+  `;
+}
+
+function createChoiceOptionHtml(data = null) {
+  return `
+    <div class="module-mini choice-option">
+      <div class="row">
+        <div class="field col-8">
+          <label>Affix auswählen</label>
+          <select class="choice-option-affix-select"></select>
+        </div>
+        <div class="field col-2">
+          <label>Weight</label>
+          <input class="choice-option-weight" type="number" min="1" value="${data?.spawn_weight ?? 1}" />
+        </div>
+        <div class="field col-2">
+          <label>&nbsp;</label>
+          <button type="button" class="btn-remove-choice-option btn-danger btn-small">Option löschen</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function refreshAffixModuleSelects(container, itemType) {
+  container.querySelectorAll(".affix-module").forEach(mod => {
+    refreshSingleAffixModule(mod, itemType);
+  });
+}
+
+function refreshSingleAffixModule(mod, itemType) {
+  const kind = mod.querySelector(".affix-module-kind").value;
+  const category = mod.querySelector(".affix-property-category").value;
+  const search = mod.querySelector(".affix-search").value || "";
+
+  const fixedBlock = mod.querySelector(".module-fixed-block");
+  const randomFillBlock = mod.querySelector(".module-random-fill-block");
+  const choiceBlock = mod.querySelector(".module-choice-group-block");
+
+  fixedBlock.classList.toggle("hidden", kind !== "fixed");
+  randomFillBlock.classList.toggle("hidden", kind !== "random_fill");
+  choiceBlock.classList.toggle("hidden", kind !== "choice_group");
+
+  const affixes = getAffixesAllowedForCurrentItemType(itemType, category, search);
+
+  const fixedSelect = mod.querySelector(".affix-select");
+  if (fixedSelect) {
+    const current = fixedSelect.dataset.value || fixedSelect.value || "";
+    fixedSelect.innerHTML = `<option value="">- bitte wählen -</option>`;
+    affixes.forEach(def => {
+      const opt = document.createElement("option");
+      opt.value = def.id;
+      opt.textContent = `${def.affix_code} | ${def.description_template}`;
+      if (String(def.id) === String(current)) opt.selected = true;
+      fixedSelect.appendChild(opt);
+    });
+  }
+
+  mod.querySelectorAll(".choice-option-affix-select").forEach(select => {
+    const current = select.dataset.value || select.value || "";
+    select.innerHTML = `<option value="">- bitte wählen -</option>`;
+    affixes.forEach(def => {
+      const opt = document.createElement("option");
+      opt.value = def.id;
+      opt.textContent = `${def.affix_code} | ${def.description_template}`;
+      if (String(def.id) === String(current)) opt.selected = true;
+      select.appendChild(opt);
+    });
+  });
+}
+
+function bindAffixModuleEvents(container, prefix) {
+  const itemType = getSelectedItemType(prefix);
+
+  container.querySelectorAll(".affix-module").forEach(mod => {
+    mod.querySelector(".btn-remove-affix-module").onclick = () => {
+      mod.remove();
+      prefix === "create" ? updateCreatePreview() : updateEditPreview();
+    };
+
+    mod.querySelector(".affix-module-kind").onchange = () => {
+      refreshSingleAffixModule(mod, getSelectedItemType(prefix));
+      prefix === "create" ? updateCreatePreview() : updateEditPreview();
+    };
+
+    mod.querySelector(".affix-property-category").onchange = () => {
+      refreshSingleAffixModule(mod, getSelectedItemType(prefix));
+      prefix === "create" ? updateCreatePreview() : updateEditPreview();
+    };
+
+    mod.querySelector(".affix-search").oninput = () => {
+      refreshSingleAffixModule(mod, getSelectedItemType(prefix));
+    };
+
+    const fixedSelect = mod.querySelector(".affix-select");
+    if (fixedSelect) {
+      fixedSelect.onchange = () => {
+        fixedSelect.dataset.value = fixedSelect.value;
+        prefix === "create" ? updateCreatePreview() : updateEditPreview();
+      };
+    }
+
+    const btnAddChoice = mod.querySelector(".btn-add-choice-option");
+    if (btnAddChoice) {
+      btnAddChoice.onclick = () => {
+        const list = mod.querySelector(".choice-options-list");
+        list.insertAdjacentHTML("beforeend", createChoiceOptionHtml());
+        bindAffixModuleEvents(container, prefix);
+        refreshSingleAffixModule(mod, getSelectedItemType(prefix));
+        prefix === "create" ? updateCreatePreview() : updateEditPreview();
+      };
+    }
+
+    mod.querySelectorAll(".btn-remove-choice-option").forEach(btn => {
+      btn.onclick = () => {
+        btn.closest(".choice-option").remove();
+        prefix === "create" ? updateCreatePreview() : updateEditPreview();
+      };
+    });
+
+    mod.querySelectorAll("input,select,textarea").forEach(el => {
+      el.oninput = () => prefix === "create" ? updateCreatePreview() : updateEditPreview();
+      el.onchange = () => prefix === "create" ? updateCreatePreview() : updateEditPreview();
+    });
+  });
+
+  refreshAffixModuleSelects(container, itemType);
+}
+
+function getTooltipArchetypeFromForm(prefix) {
+  const family = getSelectedFamily(prefix);
+  const itemType = getSelectedItemType(prefix);
+  const equipSlot = $(`${prefix}_equip_slot`).value;
+  return inferTooltipArchetype(itemType, equipSlot, family);
+}
+
+function refreshCreateDerivedFields() {
+  const itemType = getSelectedItemType("create");
+  const equipSlot = state.itemTypeToSlot.get(itemType) || "";
+  $("create_equip_slot").value = equipSlot;
+
+  const family = getSelectedFamily("create");
+  $("createWeaponBlock").classList.toggle("hidden", family !== "Waffen");
+  $("createArmorBlock").classList.toggle("hidden", family !== "Rüstung");
+
+  refreshAffixModuleSelects($("createAffixModuleList"), itemType);
+  refreshCreateItemCode();
+  updateCreatePreview();
+}
+
+function refreshEditDerivedFields() {
+  const itemType = getSelectedItemType("edit");
+  const equipSlot = state.itemTypeToSlot.get(itemType) || "";
+  $("edit_equip_slot").value = equipSlot;
+
+  const family = getSelectedFamily("edit");
+  $("editWeaponBlock").classList.toggle("hidden", family !== "Waffen");
+  $("editArmorBlock").classList.toggle("hidden", family !== "Rüstung");
+
+  refreshAffixModuleSelects($("editAffixModuleList"), itemType);
+  updateEditPreview();
+}
+
+async function refreshCreateItemCode() {
+  const displayName = $("create_display_name").value.trim();
+  const itemType = getSelectedItemType("create");
+  if (!displayName || !itemType) {
+    $("create_item_code_preview").value = "";
+    return;
+  }
+  const code = await generateUniqueItemCode(displayName, itemType);
+  $("create_item_code_preview").value = code;
+}
+
+function collectAffixModules(prefix) {
+  const modules = [];
+  const root = $(`${prefix}AffixModuleList`);
+
+  root.querySelectorAll(".affix-module").forEach((mod, idx) => {
+    const kind = mod.querySelector(".affix-module-kind").value;
+    const property_category = mod.querySelector(".affix-property-category").value;
+    const is_always_present = mod.querySelector(".affix-is-always-present").value === "true";
+
+    if (kind === "fixed") {
+      const affixId = parseNullableNumber(mod.querySelector(".affix-select").value, true);
+      if (!affixId) return;
+      const def = state.affixDefinitions.find(a => a.id === affixId);
+      if (!def) return;
+
+      modules.push({
+        kind,
+        property_category,
+        is_always_present,
+        affix_definition: def,
+        display_order: (idx + 1) * 10
+      });
+    }
+
+    if (kind === "random_fill") {
+      const count = parseNullableNumber(mod.querySelector(".random-fill-count").value, true) || 1;
+      const displayLabel = mod.querySelector(".random-fill-description").value.trim() || `+${count} zufällige magische Eigenschaften`;
+      const displayOrder = parseNullableNumber(mod.querySelector(".random-fill-order").value, true) || (idx + 1) * 10;
+
+      modules.push({
+        kind,
+        property_category,
+        choose_count: count,
+        display_label: displayLabel,
+        display_order: displayOrder
+      });
+    }
+
+    if (kind === "choice_group") {
+      const displayLabel = mod.querySelector(".choice-group-label").value.trim() || "Eine von X magischen Eigenschaften (variiert)";
+      const chooseCount = parseNullableNumber(mod.querySelector(".choice-group-choose-count").value, true) || 1;
+      const displayOrder = parseNullableNumber(mod.querySelector(".choice-group-order").value, true) || (idx + 1) * 10;
+
+      const options = [];
+      mod.querySelectorAll(".choice-option").forEach((optEl, optionIndex) => {
+        const affixId = parseNullableNumber(optEl.querySelector(".choice-option-affix-select").value, true);
+        if (!affixId) return;
+        const def = state.affixDefinitions.find(a => a.id === affixId);
+        if (!def) return;
+        options.push({
+          affix_definition: def,
+          spawn_weight: parseNullableNumber(optEl.querySelector(".choice-option-weight").value, true) || 1,
+          display_order: (optionIndex + 1) * 10
+        });
+      });
+
+      if (!options.length) return;
+
+      modules.push({
+        kind,
+        property_category,
+        display_label: displayLabel,
+        choose_count: chooseCount,
+        display_order: displayOrder,
+        options
+      });
+    }
+  });
+
+  return modules;
 }
 
 function buildPreviewHeaderLines(baseItem) {
-  const archetype = baseItem.tooltip_archetype || inferTooltipArchetype(baseItem.item_type, baseItem.equip_slot);
-  const lines = [];
+  const archetype = baseItem.tooltip_archetype;
 
   if (archetype === "weapon") {
     const dmgMin = parseNullableNumber(baseItem.damage_min, true);
@@ -288,391 +797,748 @@ function buildPreviewHeaderLines(baseItem) {
 
     if (dmgMin !== null && dmgMax !== null && aps !== null) {
       const dps = (((dmgMin + dmgMax) / 2) * aps);
-      lines.push(formatPreviewNumber(dps, 1));
-      lines.push("Schaden pro Sekunde");
-      lines.push(`${formatPreviewNumber(dmgMin, 0)}-${formatPreviewNumber(dmgMax, 0)} Schaden`);
-      lines.push(`${formatPreviewNumber(aps, 2)} Angriffe pro Sekunde`);
-    }
-  } else if (archetype === "armor") {
-    const armor = parseNullableNumber(baseItem.armor_base, true);
-    if (armor !== null) {
-      lines.push(formatPreviewNumber(armor, 0));
-      lines.push("Rüstung");
+      return [
+        formatPreviewNumber(dps, 1),
+        "Schaden pro Sekunde",
+        `${formatPreviewNumber(dmgMin, 0)}-${formatPreviewNumber(dmgMax, 0)} Schaden`,
+        `${formatPreviewNumber(aps, 2)} Angriffe pro Sekunde`
+      ];
     }
   }
 
-  return lines.filter(Boolean);
+  if (archetype === "armor") {
+    const armorMin = parseNullableNumber(baseItem.armor_min, true);
+    const armorMax = parseNullableNumber(baseItem.armor_max, true);
+    if (armorMin !== null && armorMax !== null) {
+      return [`${formatPreviewNumber(armorMin, 0)} - ${formatPreviewNumber(armorMax, 0)}`, "Rüstung"];
+    }
+    const armorBase = parseNullableNumber(baseItem.armor_base, true);
+    if (armorBase !== null) {
+      return [formatPreviewNumber(armorBase, 0), "Rüstung"];
+    }
+  }
+
+  return [];
 }
 
-function buildFixedPreviewLine(row) {
-  if (!row) return null;
+function buildDescriptionFromAffix(def) {
+  let text = def.description_template || "";
+  const value = def.value_max ?? def.value_min;
+  const value2 = def.value2_max ?? def.value2_min;
 
-  let text = row.description_template || "";
-
-  const value =
-    row.value_max !== null && row.value_max !== undefined
-      ? row.value_max
-      : row.value_min;
-
-  const value2 =
-    row.value2_max !== null && row.value2_max !== undefined
-      ? row.value2_max
-      : row.value2_min;
-
-  if (text.includes("{value}")) {
-    text = text.replaceAll("{value}", value !== null && value !== undefined ? String(value) : "");
-  }
-
-  if (text.includes("{value2}")) {
-    text = text.replaceAll("{value2}", value2 !== null && value2 !== undefined ? String(value2) : "");
-  }
-
-  return text.trim() || null;
+  text = text.replaceAll("{value}", value !== null && value !== undefined ? String(value) : "");
+  text = text.replaceAll("{value2}", value2 !== null && value2 !== undefined ? String(value2) : "");
+  return text.trim();
 }
 
-function buildChoiceGroupPreviewLines(groups) {
-  const primary = [];
-  const secondary = [];
-  const power = [];
+function buildPreviewData(baseItem, modules, powerData) {
+  const primaryLines = [];
+  const secondaryLines = [];
+  const powerLines = [];
 
-  (groups || []).forEach(group => {
-    const label = (group.display_label || "").trim();
-    const category = group.property_category || "primary";
-    const options = group.options || [];
-
-    const groupLines = [];
-
-    if (label) {
-      groupLines.push(label);
+  modules.forEach(mod => {
+    if (mod.kind === "fixed" && mod.affix_definition) {
+      const line = buildDescriptionFromAffix(mod.affix_definition);
+      if (mod.property_category === "primary") primaryLines.push(line);
+      if (mod.property_category === "secondary") secondaryLines.push(line);
     }
 
-    options.forEach(opt => {
-      const line = buildFixedPreviewLine(opt);
-      if (!line) return;
-      groupLines.push(` ${line}`);
-    });
+    if (mod.kind === "random_fill") {
+      const line = mod.display_label;
+      if (mod.property_category === "primary") primaryLines.push(line);
+      if (mod.property_category === "secondary") secondaryLines.push(line);
+    }
 
-    if (category === "primary") primary.push(...groupLines);
-    if (category === "secondary") secondary.push(...groupLines);
-    if (category === "power") power.push(...groupLines);
+    if (mod.kind === "choice_group") {
+      const bucket = mod.property_category === "secondary" ? secondaryLines : primaryLines;
+      bucket.push(mod.display_label);
+      mod.options.forEach(opt => {
+        bucket.push(` ${buildDescriptionFromAffix(opt.affix_definition)}`);
+      });
+    }
   });
 
-  return { primary, secondary, power };
-}
-
-function buildRandomAffixPreviewLines(baseItem) {
-  const primary = [];
-  const secondary = [];
-
-  const pMin = parseNullableNumber(baseItem.random_primary_min, true) ?? 0;
-  const pMax = parseNullableNumber(baseItem.random_primary_max, true) ?? 0;
-  const sMin = parseNullableNumber(baseItem.random_secondary_min, true) ?? 0;
-  const sMax = parseNullableNumber(baseItem.random_secondary_max, true) ?? 0;
-
-  if (pMin > 0 || pMax > 0) {
-    if (pMin === pMax) {
-      primary.push(`+${pMax} zufällige magische Eigenschaften`);
-    } else {
-      primary.push(`+${pMin}-${pMax} zufällige primäre Eigenschaften`);
+  if (powerData?.enabled && powerData.description) {
+    let line = powerData.description;
+    if (line.includes("{value}")) {
+      line = line.replaceAll("{value}", String(powerData.value_max ?? powerData.value_min ?? ""));
+    } else if ((powerData.value_min ?? null) !== null || (powerData.value_max ?? null) !== null) {
+      const a = powerData.value_min ?? "";
+      const b = powerData.value_max ?? "";
+      if (a !== "" && b !== "") line += ` [${a} - ${b}]%`;
     }
+    powerLines.push(line);
   }
 
-  if (sMin > 0 || sMax > 0) {
-    if (sMin === sMax) {
-      secondary.push(`+${sMax} zufällige sekundäre Eigenschaften`);
-    } else {
-      secondary.push(`+${sMin}-${sMax} zufällige sekundäre Eigenschaften`);
-    }
+  const footer = [];
+  if (baseItem.binding_mode === "tradable") footer.push("Handelbar");
+  if (baseItem.binding_mode === "account_bound") footer.push("Account Bound");
+  if (baseItem.binding_mode === "bind_on_equip") footer.push("Bind on Equip");
+  if (baseItem.binding_mode === "bind_on_pickup") footer.push("Bind on Pickup");
+  if (baseItem.is_unique_equipped) footer.push("Unique Equipped");
+  if (baseItem.source_type === "crafted" && baseItem.crafted_by) {
+    const craftedName = baseItem.crafted_by === "blacksmith" ? "Schmied" : baseItem.crafted_by === "jeweler" ? "Juwelier" : baseItem.crafted_by;
+    const tier = baseItem.crafted_tier ? ` (Stufe ${baseItem.crafted_tier})` : "";
+    footer.push(`Hergestellt von: ${craftedName}${tier}`);
   }
-
-  return { primary, secondary };
-}
-
-function buildFooterPreviewLines(baseItem) {
-  const lines = [];
-
-  if (baseItem.binding_mode === "tradable") lines.push("Handelbar");
-  if (baseItem.binding_mode === "account_bound") lines.push("Account Bound");
-  if (baseItem.binding_mode === "bind_on_equip") lines.push("Bind on Equip");
-  if (baseItem.binding_mode === "bind_on_pickup") lines.push("Bind on Pickup");
-
-  if (baseItem.is_unique_equipped) {
-    lines.push("Unique Equipped");
-  }
-
-  if (baseItem.source_type === "crafted" && baseItem.crafted_tier) {
-    lines.push(`Hergestellt von: Schmied (Stufe ${baseItem.crafted_tier})`);
-  }
-
-  if (baseItem.level_requirement !== null && baseItem.level_requirement !== undefined && baseItem.level_requirement !== "") {
-    lines.push(String(baseItem.level_requirement));
-  }
-
-  return lines;
-}
-
-function buildPreviewData(baseItem, fixedRows = [], choiceGroups = []) {
-  if (!baseItem) return null;
-
-  const header_lines = buildPreviewHeaderLines(baseItem);
-
-  const fixedPrimary = [];
-  const fixedSecondary = [];
-  const fixedPower = [];
-
-  (fixedRows || []).forEach(row => {
-    const line = buildFixedPreviewLine(row);
-    if (!line) return;
-
-    const category = row.property_category || "primary";
-    if (category === "primary") fixedPrimary.push(line);
-    if (category === "secondary") fixedSecondary.push(line);
-    if (category === "power") fixedPower.push(line);
-  });
-
-  const choiceLines = buildChoiceGroupPreviewLines(choiceGroups);
-  const randomLines = buildRandomAffixPreviewLines(baseItem);
+  if (baseItem.level_requirement) footer.push(String(baseItem.level_requirement));
 
   return {
     display_name: baseItem.display_name,
     rarity: baseItem.rarity,
-    rarity_label: getPreviewBaseLabel(baseItem),
+    rarity_label: baseItem.rarity_label || buildRarityLabelFallback(baseItem.rarity, baseItem.item_type),
     item_type: baseItem.item_type,
     equip_slot: baseItem.equip_slot,
     tooltip_archetype: baseItem.tooltip_archetype,
-    header_lines,
-    primary_lines: [...fixedPrimary, ...choiceLines.primary, ...randomLines.primary],
-    secondary_lines: [...fixedSecondary, ...choiceLines.secondary, ...randomLines.secondary],
-    power_lines: [...fixedPower, ...choiceLines.power],
-    footer_lines: buildFooterPreviewLines(baseItem)
+    header_lines: buildPreviewHeaderLines(baseItem),
+    primary_lines: primaryLines,
+    secondary_lines: secondaryLines,
+    power_lines: powerLines,
+    footer_lines: footer
+  };
+}
+
+function renderTooltipPreview(targetId, previewData) {
+  const target = $(targetId);
+  if (!target) return;
+
+  if (!previewData) {
+    target.innerHTML = `<div class="preview-hint">Keine Vorschau verfügbar.</div>`;
+    return;
+  }
+
+  const rarityClass = buildPreviewRarityClass(previewData.rarity);
+  const lines = [];
+
+  lines.push(`<div class="tooltip-preview-title ${rarityClass}">${escapeHtml(previewData.display_name || "Unbenanntes Item")}</div>`);
+  if (previewData.rarity_label) {
+    lines.push(`<div class="tooltip-line ${rarityClass}">${escapeHtml(previewData.rarity_label)}</div>`);
+  }
+
+  (previewData.header_lines || []).forEach(line => {
+    lines.push(`<div class="tooltip-line">${escapeHtml(line)}</div>`);
+  });
+
+  if (previewData.primary_lines?.length) {
+    lines.push(`<div class="tooltip-section-label">Primär</div>`);
+    previewData.primary_lines.forEach(line => lines.push(`<div class="tooltip-line">${escapeHtml(line)}</div>`));
+  }
+
+  if (previewData.secondary_lines?.length) {
+    lines.push(`<div class="tooltip-section-label">Sekundär</div>`);
+    previewData.secondary_lines.forEach(line => lines.push(`<div class="tooltip-line">${escapeHtml(line)}</div>`));
+  }
+
+  if (previewData.power_lines?.length) {
+    lines.push(`<div class="tooltip-section-label tooltip-power">Macht</div>`);
+    previewData.power_lines.forEach(line => lines.push(`<div class="tooltip-line tooltip-power">${escapeHtml(line)}</div>`));
+  }
+
+  if (previewData.footer_lines?.length) {
+    lines.push(`<div class="tooltip-divider"></div>`);
+    previewData.footer_lines.forEach(line => lines.push(`<div class="tooltip-line tooltip-footer">${escapeHtml(line)}</div>`));
+  }
+
+  target.innerHTML = `${lines.join("")}
+    <div class="preview-meta">
+      item_type: ${escapeHtml(previewData.item_type || "-")}<br>
+      equip_slot: ${escapeHtml(previewData.equip_slot || "-")}<br>
+      tooltip_archetype: ${escapeHtml(previewData.tooltip_archetype || "-")}
+    </div>`;
+}
+
+function collectBaseItemFromCreateForm() {
+  const itemType = getSelectedItemType("create");
+  const family = getSelectedFamily("create");
+  const equipSlot = $("create_equip_slot").value;
+
+  return {
+    item_code: $("create_item_code_preview").value.trim(),
+    internal_name: $("create_item_code_preview").value.trim(),
+    display_name: $("create_display_name").value.trim(),
+    rarity: $("create_rarity").value,
+    item_type: itemType,
+    equip_slot: equipSlot,
+    level_requirement: parseNullableNumber($("create_level_requirement").value, true) || 1,
+    appearance_code: $("create_appearance_code").value.trim() || $("create_item_code_preview").value.trim(),
+    rarity_label: $("create_rarity_label").value.trim(),
+    damage_min: parseNullableNumber($("create_damage_min").value, true),
+    damage_max: parseNullableNumber($("create_damage_max").value, true),
+    attacks_per_second: parseNullableNumber($("create_attacks_per_second").value, false),
+    armor_min: parseNullableNumber($("create_armor_min").value, true),
+    armor_max: parseNullableNumber($("create_armor_max").value, true),
+    block_base: parseNullableNumber($("create_block_base").value, false),
+    random_primary_min: parseNullableNumber($("create_random_primary_min").value, true) || 0,
+    random_primary_max: parseNullableNumber($("create_random_primary_max").value, true) || 0,
+    random_secondary_min: parseNullableNumber($("create_random_secondary_min").value, true) || 0,
+    random_secondary_max: parseNullableNumber($("create_random_secondary_max").value, true) || 0,
+    binding_mode: $("create_binding_mode").value,
+    is_unique_equipped: $("create_is_unique_equipped").checked,
+    source_type: $("create_is_crafted").checked ? "crafted" : "drop",
+    crafted_by: $("create_is_crafted").checked ? $("create_crafted_by").value : null,
+    crafted_tier: $("create_is_crafted").checked ? parseNullableNumber($("create_crafted_tier").value, true) : null,
+    tooltip_archetype: inferTooltipArchetype(itemType, equipSlot, family)
+  };
+}
+
+function collectBaseItemFromEditForm() {
+  const itemType = getSelectedItemType("edit");
+  const family = getSelectedFamily("edit");
+  const equipSlot = $("edit_equip_slot").value;
+
+  return {
+    item_code: $("edit_item_code").value.trim(),
+    internal_name: $("edit_item_code").value.trim(),
+    display_name: $("edit_display_name").value.trim(),
+    rarity: $("edit_rarity").value,
+    item_type: itemType,
+    equip_slot: equipSlot,
+    level_requirement: parseNullableNumber($("edit_level_requirement").value, true) || 1,
+    appearance_code: $("edit_appearance_code").value.trim() || $("edit_item_code").value.trim(),
+    rarity_label: $("edit_rarity_label").value.trim(),
+    damage_min: parseNullableNumber($("edit_damage_min").value, true),
+    damage_max: parseNullableNumber($("edit_damage_max").value, true),
+    attacks_per_second: parseNullableNumber($("edit_attacks_per_second").value, false),
+    armor_min: parseNullableNumber($("edit_armor_min").value, true),
+    armor_max: parseNullableNumber($("edit_armor_max").value, true),
+    block_base: parseNullableNumber($("edit_block_base").value, false),
+    random_primary_min: parseNullableNumber($("edit_random_primary_min").value, true) || 0,
+    random_primary_max: parseNullableNumber($("edit_random_primary_max").value, true) || 0,
+    random_secondary_min: parseNullableNumber($("edit_random_secondary_min").value, true) || 0,
+    random_secondary_max: parseNullableNumber($("edit_random_secondary_max").value, true) || 0,
+    binding_mode: $("edit_binding_mode").value,
+    is_unique_equipped: $("edit_is_unique_equipped").checked,
+    source_type: $("edit_is_crafted").checked ? "crafted" : "drop",
+    crafted_by: $("edit_is_crafted").checked ? $("edit_crafted_by").value : null,
+    crafted_tier: $("edit_is_crafted").checked ? parseNullableNumber($("edit_crafted_tier").value, true) : null,
+    tooltip_archetype: inferTooltipArchetype(itemType, equipSlot, family)
+  };
+}
+
+function collectPowerData(prefix) {
+  return {
+    enabled: $(`${prefix}_has_power`).checked,
+    description: $(`${prefix}_power_description`).value.trim(),
+    value_min: parseNullableNumber($(`${prefix}_power_value_min`).value, false),
+    value_max: parseNullableNumber($(`${prefix}_power_value_max`).value, false)
   };
 }
 
 function updateCreatePreview() {
-  const displayName = $("create_display_name").value.trim();
-  const itemType = $("create_item_type").value;
-
-  if (!displayName && !itemType) {
+  const baseItem = collectBaseItemFromCreateForm();
+  if (!baseItem.display_name && !baseItem.item_type) {
     renderTooltipPreview("createPreviewContent", null);
     return;
   }
-
-  const baseItem = collectBaseItemFromCreateForm(
-    $("create_item_code_preview").value.trim() || "preview_item"
-  );
-
-  const fixedRows = collectFixedProperties("createFixedList");
-  const choiceGroups = collectChoiceGroups("createChoiceGroupList");
-
-  const previewData = buildPreviewData(baseItem, fixedRows, choiceGroups);
-  renderTooltipPreview("createPreviewContent", previewData);
+  const modules = collectAffixModules("create");
+  const powerData = collectPowerData("create");
+  renderTooltipPreview("createPreviewContent", buildPreviewData(baseItem, modules, powerData));
 }
 
 function updateEditPreview() {
-  if (!$("editForm") || $("editForm").classList.contains("hidden")) {
+  if ($("editForm").classList.contains("hidden")) {
     renderTooltipPreview("editPreviewContent", null);
     return;
   }
-
   const baseItem = collectBaseItemFromEditForm();
-  const fixedRows = collectFixedProperties("editFixedList");
-  const choiceGroups = collectChoiceGroups("editChoiceGroupList");
-
-  const previewData = buildPreviewData(baseItem, fixedRows, choiceGroups);
-  renderTooltipPreview("editPreviewContent", previewData);
+  const modules = collectAffixModules("edit");
+  const powerData = collectPowerData("edit");
+  renderTooltipPreview("editPreviewContent", buildPreviewData(baseItem, modules, powerData));
 }
 
-function makeDefaultInternalName(itemCode) {
-  return itemCode || "";
+function resetCreateForm() {
+  $("createForm").reset();
+  $("create_random_primary_min").value = 0;
+  $("create_random_primary_max").value = 0;
+  $("create_random_secondary_min").value = 0;
+  $("create_random_secondary_max").value = 0;
+  $("create_binding_mode").value = "tradable";
+  $("createAffixModuleList").innerHTML = "";
+  $("create_has_power").checked = false;
+  $("createPowerBlock").classList.add("hidden");
+  populateFamilySelectors("create");
+  renderTooltipPreview("createPreviewContent", null);
 }
 
-function wirePreviewEvents() {
-  const createIds = [
-    "create_display_name",
-    "create_rarity",
-    "create_item_type",
-    "create_tooltip_archetype",
-    "create_level_requirement",
-    "create_binding_mode",
-    "create_source_type",
-    "create_crafted_tier",
-    "create_damage_min",
-    "create_damage_max",
-    "create_attacks_per_second",
-    "create_armor_base",
-    "create_block_base",
-    "create_min_sockets",
-    "create_max_sockets",
-    "create_rarity_label",
-    "create_random_primary_min",
-    "create_random_primary_max",
-    "create_random_secondary_min",
-    "create_random_secondary_max",
-    "create_item_set_code",
-    "create_appearance_code",
-    "create_description",
-    "create_flavor_text"
-  ];
-
-  createIds.forEach(id => {
-    const el = $(id);
-    if (!el) return;
-    el.addEventListener("input", updateCreatePreview);
-    el.addEventListener("change", updateCreatePreview);
-  });
-
-  [
-    "create_is_unique_equipped",
-    "create_can_have_gems",
-    "create_can_roll_primary_affixes",
-    "create_can_roll_secondary_affixes"
-  ].forEach(id => {
-    const el = $(id);
-    if (!el) return;
-    el.addEventListener("change", updateCreatePreview);
-  });
-
-  const editIds = [
-    "edit_display_name",
-    "edit_rarity",
-    "edit_item_type",
-    "edit_item_code",
-    "edit_internal_name",
-    "edit_tooltip_archetype",
-    "edit_level_requirement",
-    "edit_binding_mode",
-    "edit_source_type",
-    "edit_crafted_tier",
-    "edit_damage_min",
-    "edit_damage_max",
-    "edit_attacks_per_second",
-    "edit_armor_base",
-    "edit_block_base",
-    "edit_min_sockets",
-    "edit_max_sockets",
-    "edit_rarity_label",
-    "edit_random_primary_min",
-    "edit_random_primary_max",
-    "edit_random_secondary_min",
-    "edit_random_secondary_max",
-    "edit_item_set_code",
-    "edit_appearance_code",
-    "edit_description",
-    "edit_flavor_text"
-  ];
-
-  editIds.forEach(id => {
-    const el = $(id);
-    if (!el) return;
-    el.addEventListener("input", updateEditPreview);
-    el.addEventListener("change", updateEditPreview);
-  });
-
-  [
-    "edit_is_unique_equipped",
-    "edit_can_have_gems",
-    "edit_can_roll_primary_affixes",
-    "edit_can_roll_secondary_affixes"
-  ].forEach(id => {
-    const el = $(id);
-    if (!el) return;
-    el.addEventListener("change", updateEditPreview);
-  });
-  
-}
-
-function debounce(fn, wait = 250) {
-  let t = null;
-  return (...args) => {
-    clearTimeout(t);
-    t = setTimeout(() => fn(...args), wait);
+async function persistItemToDatabase(baseItem, modules, powerData, existingItemId = null) {
+  const payload = {
+    item_code: baseItem.item_code,
+    item_type: baseItem.item_type,
+    internal_name: baseItem.internal_name || baseItem.item_code,
+    display_name: baseItem.display_name,
+    rarity: baseItem.rarity,
+    equip_slot: baseItem.equip_slot,
+    level_requirement: baseItem.level_requirement,
+    appearance_code: baseItem.appearance_code || null,
+    transmog_code: null,
+    min_sockets: 0,
+    max_sockets: 0,
+    is_equippable: true,
+    is_stackable: false,
+    max_stack: 1,
+    inventory_width: 1,
+    inventory_height: 1,
+    flavor_text: "",
+    description: "",
+    can_roll_primary_affixes: true,
+    can_roll_secondary_affixes: true,
+    can_have_gems: true,
+    can_have_durability: false,
+    base_name: baseItem.display_name,
+    rarity_label: baseItem.rarity_label || buildRarityLabelFallback(baseItem.rarity, baseItem.item_type),
+    source_type: baseItem.source_type || "drop",
+    damage_min: baseItem.damage_min,
+    damage_max: baseItem.damage_max,
+    attacks_per_second: baseItem.attacks_per_second,
+    armor_base: baseItem.armor_max ?? baseItem.armor_min ?? null,
+    armor_min: baseItem.armor_min,
+    armor_max: baseItem.armor_max,
+    block_base: baseItem.block_base,
+    random_primary_min: baseItem.random_primary_min,
+    random_primary_max: baseItem.random_primary_max,
+    random_secondary_min: baseItem.random_secondary_min,
+    random_secondary_max: baseItem.random_secondary_max,
+    item_set_code: null,
+    crafted_tier: baseItem.crafted_tier,
+    crafted_by: baseItem.crafted_by,
+    binding_mode: baseItem.binding_mode,
+    is_unique_equipped: baseItem.is_unique_equipped,
+    tooltip_archetype: baseItem.tooltip_archetype
   };
-}
 
-// ---------- auth ----------
-async function getSessionAndProfile() {
-  console.log("getSessionAndProfile: start");
+  let itemId = existingItemId;
 
-  const sessionResult = await Promise.race([
-    supabaseClient.auth.getSession(),
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("getSession Timeout nach 10 Sekunden")), 10000)
-    )
-  ]);
-
-  console.log("getSessionAndProfile: getSession result", sessionResult);
-
-  const { data: sessionData, error: sessionError } = sessionResult;
-  if (sessionError) throw sessionError;
-
-  state.session = sessionData.session;
-  state.user = sessionData.session?.user || null;
-
-  console.log("getSessionAndProfile: user", state.user);
-
-  if (!state.user) {
-    console.log("getSessionAndProfile: kein user");
-    state.profile = null;
-    return;
+  if (existingItemId) {
+    const { error } = await supabaseClient.from("items").update(payload).eq("id", existingItemId);
+    if (error) throw error;
+  } else {
+    const { data, error } = await supabaseClient.from("items").insert(payload).select("id").single();
+    if (error) throw error;
+    itemId = data.id;
   }
 
-  const profileResult = await Promise.race([
-    supabaseClient
-      .from("profiles")
-      .select("*")
-      .eq("id", state.user.id)
-      .maybeSingle(),
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("profiles Query Timeout nach 10 Sekunden")), 10000)
-    )
+  if (!itemId) throw new Error("Item-ID konnte nicht ermittelt werden.");
+
+  await Promise.all([
+    supabaseClient.from("item_fixed_properties").delete().eq("item_id", itemId),
+    (async () => {
+      const { data: groups } = await supabaseClient.from("item_choice_groups").select("id").eq("item_id", itemId);
+      const groupIds = (groups || []).map(g => g.id);
+      if (groupIds.length) {
+        await supabaseClient.from("item_choice_group_options").delete().in("choice_group_id", groupIds);
+      }
+      await supabaseClient.from("item_choice_groups").delete().eq("item_id", itemId);
+    })()
   ]);
 
-  console.log("getSessionAndProfile: profile result", profileResult);
+  let fixedRows = [];
+  let groupRows = [];
+  let optionRows = [];
 
-  const { data: profile, error: profileError } = profileResult;
-  if (profileError) throw profileError;
+  modules.forEach((mod, idx) => {
+    if (mod.kind === "fixed") {
+      const def = mod.affix_definition;
+      fixedRows.push({
+        item_id: itemId,
+        property_code: `${def.affix_code}_${idx + 1}`,
+        property_category: mod.property_category,
+        stat_name: def.stat_name,
+        mod_type: def.mod_type,
+        value_min: def.value_min,
+        value_max: def.value_max,
+        value2_min: def.value2_min,
+        value2_max: def.value2_max,
+        description_template: def.description_template,
+        display_order: mod.display_order || (idx + 1) * 10,
+        is_always_present: mod.is_always_present
+      });
+    }
 
-  state.profile = profile || null;
-  console.log("getSessionAndProfile: done", state.profile);
+    if (mod.kind === "random_fill") {
+      groupRows.push({
+        _local_key: `random_fill_${idx}`,
+        item_id: itemId,
+        group_code: `random_fill_${idx + 1}`,
+        display_label: mod.display_label,
+        property_category: mod.property_category,
+        choose_count: mod.choose_count,
+        display_order: mod.display_order || (idx + 1) * 10
+      });
+    }
+
+    if (mod.kind === "choice_group") {
+      const localKey = `choice_group_${idx}`;
+      groupRows.push({
+        _local_key: localKey,
+        item_id: itemId,
+        group_code: `choice_group_${idx + 1}`,
+        display_label: mod.display_label,
+        property_category: mod.property_category,
+        choose_count: mod.choose_count,
+        display_order: mod.display_order || (idx + 1) * 10
+      });
+
+      mod.options.forEach((opt, optionIndex) => {
+        optionRows.push({
+          _group_local_key: localKey,
+          option_code: `${opt.affix_definition.affix_code}_${optionIndex + 1}`,
+          stat_name: opt.affix_definition.stat_name,
+          mod_type: opt.affix_definition.mod_type,
+          value_min: opt.affix_definition.value_min,
+          value_max: opt.affix_definition.value_max,
+          value2_min: opt.affix_definition.value2_min,
+          value2_max: opt.affix_definition.value2_max,
+          description_template: opt.affix_definition.description_template,
+          spawn_weight: opt.spawn_weight,
+          display_order: opt.display_order || (optionIndex + 1) * 10
+        });
+      });
+    }
+  });
+
+  if (powerData.enabled && powerData.description) {
+    fixedRows.push({
+      item_id: itemId,
+      property_code: "legendary_power",
+      property_category: "power",
+      stat_name: "legendary_power",
+      mod_type: "special",
+      value_min: powerData.value_min,
+      value_max: powerData.value_max,
+      value2_min: null,
+      value2_max: null,
+      description_template: powerData.description,
+      display_order: 10,
+      is_always_present: true
+    });
+  }
+
+  if (fixedRows.length) {
+    const { error } = await supabaseClient.from("item_fixed_properties").insert(fixedRows);
+    if (error) throw error;
+  }
+
+  if (groupRows.length) {
+    const groupInsertPayload = groupRows.map(({ _local_key, ...rest }) => rest);
+    const { data: insertedGroups, error } = await supabaseClient
+      .from("item_choice_groups")
+      .insert(groupInsertPayload)
+      .select("id,group_code,display_label,property_category,choose_count,display_order");
+
+    if (error) throw error;
+
+    const groupMap = new Map();
+    insertedGroups.forEach((g, index) => {
+      groupMap.set(groupRows[index]._local_key, g.id);
+    });
+
+    const finalOptions = optionRows.map(opt => ({
+      choice_group_id: groupMap.get(opt._group_local_key),
+      option_code: opt.option_code,
+      stat_name: opt.stat_name,
+      mod_type: opt.mod_type,
+      value_min: opt.value_min,
+      value_max: opt.value_max,
+      value2_min: opt.value2_min,
+      value2_max: opt.value2_max,
+      description_template: opt.description_template,
+      spawn_weight: opt.spawn_weight,
+      display_order: opt.display_order
+    })).filter(o => !!o.choice_group_id);
+
+    if (finalOptions.length) {
+      const { error: optionError } = await supabaseClient.from("item_choice_group_options").insert(finalOptions);
+      if (optionError) throw optionError;
+    }
+  }
+
+  return itemId;
 }
 
-function isAllowedUser() {
-  return state.user?.id === ALLOWED_PROFILE_ID && state.profile?.id === ALLOWED_PROFILE_ID;
+async function createItemFromForm() {
+  const baseItem = collectBaseItemFromCreateForm();
+  const modules = collectAffixModules("create");
+  const powerData = collectPowerData("create");
+
+  if (!baseItem.item_type) throw new Error("Bitte ein genaues Item auswählen.");
+  if (!baseItem.display_name) throw new Error("Bitte einen Anzeigenamen eingeben.");
+  if (!baseItem.item_code) throw new Error("item_code konnte nicht erzeugt werden.");
+
+  await persistItemToDatabase(baseItem, modules, powerData, null);
+  showStatus("Item erfolgreich angelegt.", "ok");
+  resetCreateForm();
+  await loadItemsForList();
+  renderEditItemList();
+}
+
+async function updateCurrentItemFromForm() {
+  const itemId = parseNullableNumber($("edit_item_id").value, true);
+  if (!itemId) throw new Error("Kein Item ausgewählt.");
+
+  const baseItem = collectBaseItemFromEditForm();
+  const modules = collectAffixModules("edit");
+  const powerData = collectPowerData("edit");
+
+  if (!baseItem.item_type) throw new Error("Bitte ein genaues Item auswählen.");
+  if (!baseItem.display_name) throw new Error("Bitte einen Anzeigenamen eingeben.");
+  if (!baseItem.item_code) throw new Error("Bitte item_code eingeben.");
+
+  await persistItemToDatabase(baseItem, modules, powerData, itemId);
+  showStatus("Item erfolgreich aktualisiert.", "ok");
+  await loadItemsForList();
+  renderEditItemList();
+}
+
+async function deleteCurrentItem() {
+  const itemId = parseNullableNumber($("edit_item_id").value, true);
+  if (!itemId) throw new Error("Kein Item ausgewählt.");
+
+  if (!window.confirm("Dieses Item wirklich löschen?")) return;
+
+  const { data: groups } = await supabaseClient.from("item_choice_groups").select("id").eq("item_id", itemId);
+  const groupIds = (groups || []).map(g => g.id);
+
+  if (groupIds.length) {
+    const { error: optionErr } = await supabaseClient.from("item_choice_group_options").delete().in("choice_group_id", groupIds);
+    if (optionErr) throw optionErr;
+  }
+
+  const { error: groupErr } = await supabaseClient.from("item_choice_groups").delete().eq("item_id", itemId);
+  if (groupErr) throw groupErr;
+
+  const { error: fixedErr } = await supabaseClient.from("item_fixed_properties").delete().eq("item_id", itemId);
+  if (fixedErr) throw fixedErr;
+
+  const { error } = await supabaseClient.from("items").delete().eq("id", itemId);
+  if (error) throw error;
+
+  showStatus("Item gelöscht.", "ok");
+  $("editForm").classList.add("hidden");
+  $("editHint").classList.remove("hidden");
+  state.editCurrentItem = null;
+  renderTooltipPreview("editPreviewContent", null);
+  await loadItemsForList();
+  renderEditItemList();
+}
+
+async function loadItemsForList() {
+  const { data, error } = await supabaseClient
+    .from("items")
+    .select("*")
+    .order("display_name");
+
+  if (error) throw error;
+  state.items = data || [];
+  renderItemList();
+}
+
+function renderItemList() {
+  const q = $("list_search").value.trim().toLowerCase();
+  const rarity = $("list_filter_rarity").value;
+  const itemType = $("list_filter_item_type").value;
+
+  const list = $("itemList");
+  list.innerHTML = "";
+
+  state.items
+    .filter(item => {
+      if (rarity && item.rarity !== rarity) return false;
+      if (itemType && item.item_type !== itemType) return false;
+      if (!q) return true;
+      return (
+        String(item.display_name || "").toLowerCase().includes(q) ||
+        String(item.item_code || "").toLowerCase().includes(q) ||
+        String(item.item_type || "").toLowerCase().includes(q)
+      );
+    })
+    .forEach(item => {
+      const card = document.createElement("div");
+      card.className = "item-card";
+      card.innerHTML = `
+        <div class="item-title">${escapeHtml(item.display_name)}</div>
+        <div class="pill">${escapeHtml(item.rarity)}</div>
+        <div class="pill">${escapeHtml(item.item_type)}</div>
+        <div class="pill">${escapeHtml(item.equip_slot || "-")}</div>
+        <div class="muted" style="margin-top:8px;">${escapeHtml(item.item_code)}</div>
+      `;
+      list.appendChild(card);
+    });
+}
+
+function renderEditItemList() {
+  const q = $("edit_search").value.trim().toLowerCase();
+  const list = $("editItemList");
+  list.innerHTML = "";
+
+  state.items
+    .filter(item => {
+      if (!q) return true;
+      return (
+        String(item.display_name || "").toLowerCase().includes(q) ||
+        String(item.item_code || "").toLowerCase().includes(q)
+      );
+    })
+    .forEach(item => {
+      const card = document.createElement("div");
+      card.className = "item-card";
+      card.innerHTML = `
+        <div class="item-title">${escapeHtml(item.display_name)}</div>
+        <div class="pill">${escapeHtml(item.rarity)}</div>
+        <div class="pill">${escapeHtml(item.item_type)}</div>
+        <div class="muted" style="margin-top:8px;">${escapeHtml(item.item_code)}</div>
+      `;
+      card.onclick = () => loadItemIntoEdit(item.id);
+      list.appendChild(card);
+    });
+}
+
+async function loadItemIntoEdit(itemId) {
+  const { data: item, error: itemErr } = await supabaseClient.from("items").select("*").eq("id", itemId).single();
+  if (itemErr) throw itemErr;
+
+  const { data: fixedRows, error: fixedErr } = await supabaseClient
+    .from("item_fixed_properties")
+    .select("*")
+    .eq("item_id", itemId)
+    .order("display_order");
+  if (fixedErr) throw fixedErr;
+
+  const { data: groups, error: groupErr } = await supabaseClient
+    .from("item_choice_groups")
+    .select("*")
+    .eq("item_id", itemId)
+    .order("display_order");
+  if (groupErr) throw groupErr;
+
+  const groupIds = (groups || []).map(g => g.id);
+  let options = [];
+  if (groupIds.length) {
+    const { data: opts, error: optErr } = await supabaseClient
+      .from("item_choice_group_options")
+      .select("*")
+      .in("choice_group_id", groupIds)
+      .order("display_order");
+    if (optErr) throw optErr;
+    options = opts || [];
+  }
+
+  fillEditForm(item, fixedRows || [], groups || [], options || []);
+}
+
+function findAffixDefinitionIdByDefinitionLike(row) {
+  const match = state.affixDefinitions.find(def =>
+    def.stat_name === row.stat_name &&
+    def.mod_type === row.mod_type &&
+    String(def.description_template || "") === String(row.description_template || "")
+  );
+  return match?.id || "";
+}
+
+function fillEditForm(item, fixedRows, groups, options) {
+  state.editCurrentItem = item;
+
+  $("edit_item_id").value = item.id;
+  $("edit_display_name").value = item.display_name || "";
+  $("edit_item_code").value = item.item_code || "";
+  $("edit_rarity").value = item.rarity || "normal";
+  $("edit_level_requirement").value = item.level_requirement || 1;
+  $("edit_appearance_code").value = item.appearance_code || "";
+  $("edit_rarity_label").value = item.rarity_label || "";
+  $("edit_damage_min").value = item.damage_min ?? "";
+  $("edit_damage_max").value = item.damage_max ?? "";
+  $("edit_attacks_per_second").value = item.attacks_per_second ?? "";
+  $("edit_armor_min").value = item.armor_min ?? "";
+  $("edit_armor_max").value = item.armor_max ?? "";
+  $("edit_block_base").value = item.block_base ?? "";
+  $("edit_random_primary_min").value = item.random_primary_min ?? 0;
+  $("edit_random_primary_max").value = item.random_primary_max ?? 0;
+  $("edit_random_secondary_min").value = item.random_secondary_min ?? 0;
+  $("edit_random_secondary_max").value = item.random_secondary_max ?? 0;
+  $("edit_binding_mode").value = item.binding_mode || "tradable";
+  $("edit_is_unique_equipped").checked = !!item.is_unique_equipped;
+  $("edit_is_crafted").checked = item.source_type === "crafted";
+  $("edit_crafted_by").value = item.crafted_by || "";
+  $("edit_crafted_tier").value = item.crafted_tier ?? "";
+
+  const { family, subfamily } = getFamilyOfItemType(item.item_type);
+  $("edit_item_family").value = family;
+  $("edit_item_family").dispatchEvent(new Event("change"));
+  $("edit_item_subfamily").value = subfamily;
+  $("edit_item_subfamily").dispatchEvent(new Event("change"));
+  $("edit_item_type").value = item.item_type;
+  $("edit_equip_slot").value = item.equip_slot || state.itemTypeToSlot.get(item.item_type) || "";
+
+  const powerRow = fixedRows.find(r => r.property_category === "power");
+  $("edit_has_power").checked = !!powerRow;
+  $("editPowerBlock").classList.toggle("hidden", !powerRow);
+  $("edit_power_description").value = powerRow?.description_template || "";
+  $("edit_power_value_min").value = powerRow?.value_min ?? "";
+  $("edit_power_value_max").value = powerRow?.value_max ?? "";
+
+  const normalFixed = fixedRows.filter(r => r.property_category !== "power");
+
+  const modRoot = $("editAffixModuleList");
+  modRoot.innerHTML = "";
+
+  normalFixed.forEach((row, idx) => {
+    modRoot.insertAdjacentHTML("beforeend", createAffixModuleHtml("edit", `fixed_${idx}`, {
+      kind: "fixed",
+      property_category: row.property_category,
+      is_always_present: row.is_always_present
+    }));
+    const mod = modRoot.lastElementChild;
+    mod.querySelector(".affix-select").dataset.value = String(findAffixDefinitionIdByDefinitionLike(row));
+  });
+
+  groups.forEach((group, idx) => {
+    const groupOptions = options.filter(o => o.choice_group_id === group.id);
+
+    const isRandomFill =
+      groupOptions.length === 0 &&
+      String(group.display_label || "").toLowerCase().includes("zufällige");
+
+    modRoot.insertAdjacentHTML("beforeend", createAffixModuleHtml("edit", `group_${idx}`, {
+      kind: isRandomFill ? "random_fill" : "choice_group",
+      property_category: group.property_category,
+      display_label: group.display_label,
+      choose_count: group.choose_count,
+      display_order: group.display_order
+    }));
+
+    const mod = modRoot.lastElementChild;
+    if (!isRandomFill) {
+      const list = mod.querySelector(".choice-options-list");
+      groupOptions.forEach(opt => {
+        list.insertAdjacentHTML("beforeend", createChoiceOptionHtml({ spawn_weight: opt.spawn_weight }));
+        list.lastElementChild.querySelector(".choice-option-affix-select").dataset.value = String(findAffixDefinitionIdByDefinitionLike(opt));
+      });
+    }
+  });
+
+  bindAffixModuleEvents(modRoot, "edit");
+  refreshEditDerivedFields();
+
+  $("editForm").classList.remove("hidden");
+  $("editHint").classList.add("hidden");
+  updateEditPreview();
 }
 
 async function login() {
-  console.log("Login geklickt");
   clearStatus();
-
   try {
     const email = $("login_email").value.trim();
     const password = $("login_password").value;
-
     if (!email || !password) {
       showStatus("Bitte E-Mail und Passwort eingeben.", "error");
       return;
     }
 
-    console.log("login: vor signInWithPassword");
-
-    const { data, error } = await supabaseClient.auth.signInWithPassword({
-      email,
-      password
-    });
-
-    console.log("login: nach signInWithPassword", data, error);
-
+    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
     if (error) throw error;
 
-    showStatus("Login erfolgreich. Lade App...", "ok");
-
-    console.log("login: vor initAppAfterAuth");
     await initAppAfterAuth();
-    console.log("login: nach initAppAfterAuth");
-
     showStatus("Login erfolgreich.", "ok");
   } catch (err) {
-    console.error("login catch:", err);
     showStatus(`Login fehlgeschlagen:\n${err.message}`, "error");
   }
 }
@@ -684,1241 +1550,190 @@ async function logout() {
   state.profile = null;
   $("authCard").classList.remove("hidden");
   $("appShell").classList.add("hidden");
-  showStatus("Ausgeloggt.", "info");
 }
 
-// ---------- data loading ----------
-async function loadReferenceData() {
-  // item types from equip_slot_item_types
-  const { data: slotTypeRows, error: slotTypeError } = await supabaseClient
-    .from("equip_slot_item_types")
-    .select("equip_slot, item_type, sort_order, is_enabled")
-    .order("sort_order", { ascending: true });
-
-  if (slotTypeError) throw slotTypeError;
-
-  state.itemTypeMap.clear();
-  state.itemTypes = [];
-
-  (slotTypeRows || [])
-    .filter(r => r.is_enabled !== false)
-    .forEach(row => {
-      state.itemTypeMap.set(row.item_type, {
-        equip_slot: row.equip_slot,
-        sort_order: row.sort_order ?? 0
-      });
-      state.itemTypes.push(row.item_type);
-    });
-
-  state.itemTypes = [...new Set(state.itemTypes)];
-
-  // class rules
-  const { data: classRules, error: classRulesError } = await supabaseClient
-    .from("item_type_class_rules")
-    .select("item_type, class_code, is_allowed");
-
-  if (classRulesError && !String(classRulesError.message).includes("permission")) {
-    throw classRulesError;
-  }
-  state.classRules = classRules || [];
-
-  // classes
-  const { data: classes, error: classesError } = await supabaseClient
-    .from("class_definitions")
-    .select("class_code, display_name")
-    .order("sort_order", { ascending: true });
-
-  if (classesError && !String(classesError.message).includes("permission")) {
-    throw classesError;
-  }
-  state.classes = classes || [];
-
-  populateItemTypeSelects();
-}
-
-function populateItemTypeSelects() {
-  const selects = [$("create_item_type"), $("edit_item_type"), $("list_filter_type")];
-  selects.forEach(sel => {
-    const current = sel.value;
-    sel.innerHTML = sel.id === "list_filter_type" ? `<option value="">alle</option>` : `<option value="">bitte wählen</option>`;
-
-    state.itemTypes.forEach(itemType => {
-      const opt = document.createElement("option");
-      opt.value = itemType;
-      opt.textContent = itemType;
-      sel.appendChild(opt);
-    });
-
-    if (current && state.itemTypes.includes(current)) {
-      sel.value = current;
-    }
-  });
-}
-
-async function loadItemsForList() {
-  const { data, error } = await supabaseClient
-    .from("items")
-    .select(`
-      id,
-      item_code,
-      internal_name,
-      display_name,
-      rarity,
-      rarity_label,
-      item_type,
-      equip_slot,
-      tooltip_archetype,
-      level_requirement,
-      binding_mode,
-      source_type,
-      crafted_tier,
-      is_unique_equipped,
-      damage_min,
-      damage_max,
-      attacks_per_second,
-      armor_base,
-      block_base,
-      random_primary_min,
-      random_primary_max,
-      random_secondary_min,
-      random_secondary_max
-    `)
-    .order("id", { ascending: false });
-
-  if (error) throw error;
-  state.allItems = data || [];
-  renderItemList();
-  renderEditItemList();
-}
-
-async function loadItemDeep(itemId) {
-  const { data: item, error: itemError } = await supabaseClient
-    .from("items")
-    .select("*")
-    .eq("id", itemId)
-    .single();
-
-  if (itemError) throw itemError;
-
-  const { data: fixedRows, error: fixedError } = await supabaseClient
-    .from("item_fixed_properties")
-    .select("*")
-    .eq("item_id", itemId)
-    .order("display_order", { ascending: true });
-
-  if (fixedError) throw fixedError;
-
-  const { data: groups, error: groupError } = await supabaseClient
-    .from("item_choice_groups")
-    .select("*")
-    .eq("item_id", itemId)
-    .order("display_order", { ascending: true });
-
-  if (groupError) throw groupError;
-
-  const groupIds = (groups || []).map(g => g.id);
-
-  let options = [];
-  if (groupIds.length > 0) {
-    const { data: optionRows, error: optionError } = await supabaseClient
-      .from("item_choice_group_options")
-      .select("*")
-      .in("choice_group_id", groupIds)
-      .order("display_order", { ascending: true });
-
-    if (optionError) throw optionError;
-    options = optionRows || [];
-  }
-
-  return {
-    item,
-    fixedRows: fixedRows || [],
-    groups: groups || [],
-    options
-  };
-}
-
-// ---------- render list ----------
-function renderItemList() {
-  const search = $("list_search").value.trim().toLowerCase();
-  const rarity = $("list_filter_rarity").value;
-  const itemType = $("list_filter_type").value;
-
-  let rows = [...state.allItems];
-
-  if (rarity) rows = rows.filter(r => r.rarity === rarity);
-  if (itemType) rows = rows.filter(r => r.item_type === itemType);
-  if (search) {
-    rows = rows.filter(r =>
-      (r.display_name || "").toLowerCase().includes(search) ||
-      (r.item_code || "").toLowerCase().includes(search) ||
-      (r.item_type || "").toLowerCase().includes(search) ||
-      (r.rarity_label || "").toLowerCase().includes(search)
-    );
-  }
-
-  const container = $("itemList");
-  container.innerHTML = "";
-
-  if (rows.length === 0) {
-    container.innerHTML = `<div class="muted">Keine Items gefunden.</div>`;
-    return;
-  }
-
-  rows.forEach(item => {
-    const card = document.createElement("div");
-    card.className = "item-card";
-    card.innerHTML = `
-      <div class="item-title">${escapeHtml(item.display_name || "")}</div>
-      <div class="muted">${escapeHtml(item.item_code || "")}</div>
-      <div style="margin-top:8px;">
-        <span class="pill">${escapeHtml(item.rarity || "")}</span>
-        <span class="pill">${escapeHtml(item.item_type || "")}</span>
-        <span class="pill">${escapeHtml(item.equip_slot || "")}</span>
-      </div>
-    `;
-    card.addEventListener("click", async () => {
-      await openEditItem(item.id);
-      setTab("tab-edit");
-    });
-    container.appendChild(card);
-  });
-}
-
-function renderEditItemList() {
-  const search = $("edit_search").value.trim().toLowerCase();
-  let rows = [...state.allItems];
-
-  if (search) {
-    rows = rows.filter(r =>
-      (r.display_name || "").toLowerCase().includes(search) ||
-      (r.item_code || "").toLowerCase().includes(search)
-    );
-  }
-
-  const container = $("editItemList");
-  container.innerHTML = "";
-
-  rows.forEach(item => {
-    const card = document.createElement("div");
-    card.className = "item-card";
-    card.innerHTML = `
-      <div class="item-title">${escapeHtml(item.display_name || "")}</div>
-      <div class="muted">${escapeHtml(item.item_code || "")}</div>
-      <div style="margin-top:8px;">
-        <span class="pill">${escapeHtml(item.rarity || "")}</span>
-        <span class="pill">${escapeHtml(item.item_type || "")}</span>
-      </div>
-    `;
-    card.addEventListener("click", async () => {
-      await openEditItem(item.id);
-    });
-    container.appendChild(card);
-  });
-
-  if (rows.length === 0) {
-    container.innerHTML = `<div class="muted">Keine Items gefunden.</div>`;
-  }
-}
-
-async function openEditItem(itemId) {
-  clearStatus();
-  try {
-    const payload = await loadItemDeep(itemId);
-    state.currentEditItem = payload;
-    fillEditForm(payload);
-    $("editHint").textContent = `Bearbeite: ${payload.item.display_name} (${payload.item.item_code})`;
-    $("editForm").classList.remove("hidden");
-  } catch (err) {
-    showStatus(`Item konnte nicht geladen werden:\n${err.message}`, "error");
-  }
-}
-
-// ---------- repeaters ----------
-function escapeHtml(str) {
-  return String(str ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function createFixedPropertyHtml(prefix, data = {}) {
-  return `
-    <div class="repeater-item fixed-property">
-      <div class="toolbar" style="justify-content:flex-end;">
-        <button type="button" class="btn-danger btn-small btn-remove-fixed">Entfernen</button>
-      </div>
-
-      <div class="row">
-        <div class="field col-3">
-          <label>Property Code</label>
-          <input class="${prefix}_fixed_property_code" type="text" value="${escapeHtml(data.property_code || "")}" placeholder="z. B. shield_block_chance" />
-        </div>
-        <div class="field col-3">
-          <label>Property Category</label>
-          <select class="${prefix}_fixed_property_category">
-            ${selectOptions(["primary","secondary","power","meta"], data.property_category)}
-          </select>
-        </div>
-        <div class="field col-3">
-          <label>Stat Name</label>
-          <input class="${prefix}_fixed_stat_name" type="text" value="${escapeHtml(data.stat_name || "")}" placeholder="z. B. block_chance" />
-        </div>
-        <div class="field col-3">
-          <label>Mod Type</label>
-          <select class="${prefix}_fixed_mod_type">
-            ${selectOptions(["flat","percent","percent_add","percent_mult","range","special"], data.mod_type || "flat")}
-          </select>
-        </div>
-      </div>
-
-      <div class="row">
-        <div class="field col-3">
-          <label>Value Min</label>
-          <input class="${prefix}_fixed_value_min" type="number" step="0.01" value="${data.value_min ?? ""}" />
-        </div>
-        <div class="field col-3">
-          <label>Value Max</label>
-          <input class="${prefix}_fixed_value_max" type="number" step="0.01" value="${data.value_max ?? ""}" />
-        </div>
-        <div class="field col-3">
-          <label>Value2 Min</label>
-          <input class="${prefix}_fixed_value2_min" type="number" step="0.01" value="${data.value2_min ?? ""}" />
-        </div>
-        <div class="field col-3">
-          <label>Value2 Max</label>
-          <input class="${prefix}_fixed_value2_max" type="number" step="0.01" value="${data.value2_max ?? ""}" />
-        </div>
-      </div>
-
-      <div class="row">
-        <div class="field col-9">
-          <label>Description Template</label>
-          <input class="${prefix}_fixed_description_template" type="text" value="${escapeHtml(data.description_template || "")}" placeholder="+{value}% Blockchance" />
-        </div>
-        <div class="field col-2">
-          <label>Display Order</label>
-          <input class="${prefix}_fixed_display_order" type="number" value="${data.display_order ?? 0}" />
-        </div>
-        <div class="field col-1">
-          <label>Immer</label>
-          <input class="${prefix}_fixed_is_always_present" type="checkbox" ${data.is_always_present === false ? "" : "checked"} />
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-function createChoiceGroupHtml(prefix, group = {}, options = []) {
-  return `
-    <div class="repeater-item choice-group">
-      <div class="toolbar" style="justify-content:space-between;">
-        <strong>Choice Group</strong>
-        <div class="inline">
-          <button type="button" class="btn-secondary btn-small btn-add-option">+ Option</button>
-          <button type="button" class="btn-danger btn-small btn-remove-group">Gruppe entfernen</button>
-        </div>
-      </div>
-
-      <div class="row">
-        <div class="field col-3">
-          <label>Group Code</label>
-          <input class="${prefix}_group_code" type="text" value="${escapeHtml(group.group_code || "")}" placeholder="z. B. shield_mainstat" />
-        </div>
-        <div class="field col-4">
-          <label>Display Label</label>
-          <input class="${prefix}_group_label" type="text" value="${escapeHtml(group.display_label || "")}" placeholder="Eine von 3 magischen Eigenschaften (variiert)" />
-        </div>
-        <div class="field col-2">
-          <label>Property Category</label>
-          <select class="${prefix}_group_property_category">
-            ${selectOptions(["primary","secondary","power","meta"], group.property_category || "primary")}
-          </select>
-        </div>
-        <div class="field col-1">
-          <label>Choose</label>
-          <input class="${prefix}_group_choose_count" type="number" min="1" value="${group.choose_count ?? 1}" />
-        </div>
-        <div class="field col-2">
-          <label>Display Order</label>
-          <input class="${prefix}_group_display_order" type="number" value="${group.display_order ?? 0}" />
-        </div>
-      </div>
-
-      <div class="choice-options repeater-list">
-        ${options.map(opt => createChoiceOptionHtml(prefix, opt)).join("")}
-      </div>
-    </div>
-  `;
-}
-
-function createChoiceOptionHtml(prefix, option = {}) {
-  return `
-    <div class="sub-block choice-option">
-      <div class="toolbar" style="justify-content:flex-end;">
-        <button type="button" class="btn-danger btn-small btn-remove-option">Option entfernen</button>
-      </div>
-
-      <div class="row">
-        <div class="field col-3">
-          <label>Option Code</label>
-          <input class="${prefix}_option_code" type="text" value="${escapeHtml(option.option_code || "")}" placeholder="z. B. mainstat_str" />
-        </div>
-        <div class="field col-3">
-          <label>Stat Name</label>
-          <input class="${prefix}_option_stat_name" type="text" value="${escapeHtml(option.stat_name || "")}" placeholder="z. B. strength" />
-        </div>
-        <div class="field col-3">
-          <label>Mod Type</label>
-          <select class="${prefix}_option_mod_type">
-            ${selectOptions(["flat","percent","percent_add","percent_mult","range","special"], option.mod_type || "flat")}
-          </select>
-        </div>
-        <div class="field col-3">
-          <label>Spawn Weight</label>
-          <input class="${prefix}_option_spawn_weight" type="number" min="1" value="${option.spawn_weight ?? 100}" />
-        </div>
-      </div>
-
-      <div class="row">
-        <div class="field col-3">
-          <label>Value Min</label>
-          <input class="${prefix}_option_value_min" type="number" step="0.01" value="${option.value_min ?? ""}" />
-        </div>
-        <div class="field col-3">
-          <label>Value Max</label>
-          <input class="${prefix}_option_value_max" type="number" step="0.01" value="${option.value_max ?? ""}" />
-        </div>
-        <div class="field col-3">
-          <label>Value2 Min</label>
-          <input class="${prefix}_option_value2_min" type="number" step="0.01" value="${option.value2_min ?? ""}" />
-        </div>
-        <div class="field col-3">
-          <label>Value2 Max</label>
-          <input class="${prefix}_option_value2_max" type="number" step="0.01" value="${option.value2_max ?? ""}" />
-        </div>
-      </div>
-
-      <div class="row">
-        <div class="field col-10">
-          <label>Description Template</label>
-          <input class="${prefix}_option_description_template" type="text" value="${escapeHtml(option.description_template || "")}" placeholder="+{value} Stärke" />
-        </div>
-        <div class="field col-2">
-          <label>Display Order</label>
-          <input class="${prefix}_option_display_order" type="number" value="${option.display_order ?? 0}" />
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-function selectOptions(values, selected) {
-  return values.map(v => `<option value="${escapeHtml(v)}" ${v === selected ? "selected" : ""}>${escapeHtml(v)}</option>`).join("");
-}
-
-function bindRepeaterEvents(root) {
-  root.querySelectorAll(".btn-remove-fixed").forEach(btn => {
-    btn.onclick = () => {
-      btn.closest(".fixed-property").remove();
-      updateCreatePreview();
-      updateEditPreview();
-    };
-  });
-
-  root.querySelectorAll(".btn-remove-group").forEach(btn => {
-    btn.onclick = () => {
-      btn.closest(".choice-group").remove();
-      updateCreatePreview();
-      updateEditPreview();
-    };
-  });
-
-  root.querySelectorAll(".btn-add-option").forEach(btn => {
-    btn.onclick = () => {
-      const container = btn.closest(".choice-group").querySelector(".choice-options");
-      container.insertAdjacentHTML("beforeend", createChoiceOptionHtml("x"));
-      bindRepeaterEvents(container);
-      wirePreviewEventsInside(container);
-      updateCreatePreview();
-      updateEditPreview();
-    };
-  });
-
-  root.querySelectorAll(".btn-remove-option").forEach(btn => {
-    btn.onclick = () => {
-      btn.closest(".choice-option").remove();
-      updateCreatePreview();
-      updateEditPreview();
-    };
-  });
-
-  wirePreviewEventsInside(root);
-}
-
-function wirePreviewEventsInside(root) {
-  root.querySelectorAll("input, select, textarea").forEach(el => {
-    el.oninput = () => {
-      updateCreatePreview();
-      updateEditPreview();
-    };
-    el.onchange = () => {
-      updateCreatePreview();
-      updateEditPreview();
-    };
-  });
-}
-
-// ---------- form collect ----------
-function collectBaseItemFromCreateForm(generatedItemCode) {
-  const itemType = $("create_item_type").value;
-  const equipSlot = $("create_equip_slot").value;
-  const tooltipArchetype = $("create_tooltip_archetype").value || inferTooltipArchetype(itemType, equipSlot);
-  const rarity = $("create_rarity").value;
-  const rarityLabel = parseNullableText($("create_rarity_label").value) || buildRarityLabelFallback(rarity, itemType, tooltipArchetype);
-
-  return {
-    item_code: generatedItemCode,
-    internal_name: makeDefaultInternalName(generatedItemCode),
-    display_name: $("create_display_name").value.trim(),
-    rarity,
-    item_type: itemType,
-    equip_slot: equipSlot || null,
-    level_requirement: parseNullableNumber($("create_level_requirement").value, true) ?? 1,
-    description: $("create_description").value.trim() || rarityLabel,
-    flavor_text: $("create_flavor_text").value.trim() || "",
-    transmog_code: null,
-    appearance_code: parseNullableText($("create_appearance_code").value) || generatedItemCode,
-    min_sockets: parseNullableNumber($("create_min_sockets").value, true) ?? 0,
-    max_sockets: parseNullableNumber($("create_max_sockets").value, true) ?? 0,
-    is_equippable: true,
-    is_stackable: false,
-    max_stack: 1,
-    inventory_width: 1,
-    inventory_height: 1,
-    icon_path: null,
-    mesh_path: null,
-    can_roll_primary_affixes: boolFromCheckbox("create_can_roll_primary_affixes"),
-    can_roll_secondary_affixes: boolFromCheckbox("create_can_roll_secondary_affixes"),
-    can_have_gems: boolFromCheckbox("create_can_have_gems"),
-    can_have_durability: true,
-    base_name: $("create_display_name").value.trim(),
-    rarity_label: rarityLabel,
-    source_type: $("create_source_type").value,
-    damage_min: parseNullableNumber($("create_damage_min").value, true),
-    damage_max: parseNullableNumber($("create_damage_max").value, true),
-    attacks_per_second: parseNullableNumber($("create_attacks_per_second").value, false),
-    armor_base: parseNullableNumber($("create_armor_base").value, true),
-    block_base: parseNullableNumber($("create_block_base").value, false),
-    random_primary_min: parseNullableNumber($("create_random_primary_min").value, true) ?? 0,
-    random_primary_max: parseNullableNumber($("create_random_primary_max").value, true) ?? 0,
-    random_secondary_min: parseNullableNumber($("create_random_secondary_min").value, true) ?? 0,
-    random_secondary_max: parseNullableNumber($("create_random_secondary_max").value, true) ?? 0,
-    item_set_code: parseNullableText($("create_item_set_code").value),
-    crafted_tier: parseNullableNumber($("create_crafted_tier").value, true),
-    binding_mode: $("create_binding_mode").value,
-    is_unique_equipped: boolFromCheckbox("create_is_unique_equipped"),
-    tooltip_archetype: tooltipArchetype
-  };
-}
-
-function collectBaseItemFromEditForm() {
-  const itemType = $("edit_item_type").value;
-  const equipSlot = $("edit_equip_slot").value;
-  const tooltipArchetype = $("edit_tooltip_archetype").value || inferTooltipArchetype(itemType, equipSlot);
-  const rarity = $("edit_rarity").value;
-  const rarityLabel = parseNullableText($("edit_rarity_label").value) || buildRarityLabelFallback(rarity, itemType, tooltipArchetype);
-
-  return {
-    item_code: $("edit_item_code").value.trim(),
-    internal_name: $("edit_internal_name").value.trim(),
-    display_name: $("edit_display_name").value.trim(),
-    rarity,
-    item_type: itemType,
-    equip_slot: equipSlot || null,
-    level_requirement: parseNullableNumber($("edit_level_requirement").value, true) ?? 1,
-    description: $("edit_description").value.trim() || rarityLabel,
-    flavor_text: $("edit_flavor_text").value.trim() || "",
-    appearance_code: parseNullableText($("edit_appearance_code").value),
-    min_sockets: parseNullableNumber($("edit_min_sockets").value, true) ?? 0,
-    max_sockets: parseNullableNumber($("edit_max_sockets").value, true) ?? 0,
-    is_equippable: true,
-    is_stackable: false,
-    max_stack: 1,
-    inventory_width: 1,
-    inventory_height: 1,
-    icon_path: null,
-    mesh_path: null,
-    can_roll_primary_affixes: boolFromCheckbox("edit_can_roll_primary_affixes"),
-    can_roll_secondary_affixes: boolFromCheckbox("edit_can_roll_secondary_affixes"),
-    can_have_gems: boolFromCheckbox("edit_can_have_gems"),
-    can_have_durability: true,
-    base_name: $("edit_display_name").value.trim(),
-    rarity_label: rarityLabel,
-    source_type: $("edit_source_type").value,
-    damage_min: parseNullableNumber($("edit_damage_min").value, true),
-    damage_max: parseNullableNumber($("edit_damage_max").value, true),
-    attacks_per_second: parseNullableNumber($("edit_attacks_per_second").value, false),
-    armor_base: parseNullableNumber($("edit_armor_base").value, true),
-    block_base: parseNullableNumber($("edit_block_base").value, false),
-    random_primary_min: parseNullableNumber($("edit_random_primary_min").value, true) ?? 0,
-    random_primary_max: parseNullableNumber($("edit_random_primary_max").value, true) ?? 0,
-    random_secondary_min: parseNullableNumber($("edit_random_secondary_min").value, true) ?? 0,
-    random_secondary_max: parseNullableNumber($("edit_random_secondary_max").value, true) ?? 0,
-    item_set_code: parseNullableText($("edit_item_set_code").value),
-    crafted_tier: parseNullableNumber($("edit_crafted_tier").value, true),
-    binding_mode: $("edit_binding_mode").value,
-    is_unique_equipped: boolFromCheckbox("edit_is_unique_equipped"),
-    tooltip_archetype: tooltipArchetype
-  };
-}
-
-function collectFixedProperties(containerId) {
-  const list = [];
-  const items = $(containerId).querySelectorAll(".fixed-property");
-
-  items.forEach((el, index) => {
-    const row = {
-      property_code: el.querySelector('[class$="_fixed_property_code"]').value.trim(),
-      property_category: el.querySelector('[class$="_fixed_property_category"]').value,
-      stat_name: parseNullableText(el.querySelector('[class$="_fixed_stat_name"]').value),
-      mod_type: el.querySelector('[class$="_fixed_mod_type"]').value,
-      value_min: parseNullableNumber(el.querySelector('[class$="_fixed_value_min"]').value, false),
-      value_max: parseNullableNumber(el.querySelector('[class$="_fixed_value_max"]').value, false),
-      value2_min: parseNullableNumber(el.querySelector('[class$="_fixed_value2_min"]').value, false),
-      value2_max: parseNullableNumber(el.querySelector('[class$="_fixed_value2_max"]').value, false),
-      description_template: el.querySelector('[class$="_fixed_description_template"]').value.trim(),
-      display_order: parseNullableNumber(el.querySelector('[class$="_fixed_display_order"]').value, true) ?? ((index + 1) * 10),
-      is_always_present: el.querySelector('[class$="_fixed_is_always_present"]').checked
-    };
-
-    const hasContent =
-      row.property_code ||
-      row.stat_name ||
-      row.description_template ||
-      row.value_min !== null ||
-      row.value_max !== null ||
-      row.value2_min !== null ||
-      row.value2_max !== null;
-
-    if (hasContent) list.push(row);
-  });
-
-  return list;
-}
-
-function collectChoiceGroups(containerId) {
-  const result = [];
-  const groups = $(containerId).querySelectorAll(".choice-group");
-
-  groups.forEach((groupEl, groupIndex) => {
-    const group = {
-      group_code: groupEl.querySelector('[class$="_group_code"]').value.trim(),
-      display_label: groupEl.querySelector('[class$="_group_label"]').value.trim(),
-      property_category: groupEl.querySelector('[class$="_group_property_category"]').value,
-      choose_count: parseNullableNumber(groupEl.querySelector('[class$="_group_choose_count"]').value, true) ?? 1,
-      display_order: parseNullableNumber(groupEl.querySelector('[class$="_group_display_order"]').value, true) ?? ((groupIndex + 1) * 10),
-      options: []
-    };
-
-    const optionEls = groupEl.querySelectorAll(".choice-option");
-    optionEls.forEach((optEl, optionIndex) => {
-      const opt = {
-        option_code: optEl.querySelector('[class$="_option_code"]').value.trim(),
-        stat_name: parseNullableText(optEl.querySelector('[class$="_option_stat_name"]').value),
-        mod_type: optEl.querySelector('[class$="_option_mod_type"]').value,
-        value_min: parseNullableNumber(optEl.querySelector('[class$="_option_value_min"]').value, false),
-        value_max: parseNullableNumber(optEl.querySelector('[class$="_option_value_max"]').value, false),
-        value2_min: parseNullableNumber(optEl.querySelector('[class$="_option_value2_min"]').value, false),
-        value2_max: parseNullableNumber(optEl.querySelector('[class$="_option_value2_max"]').value, false),
-        description_template: optEl.querySelector('[class$="_option_description_template"]').value.trim(),
-        spawn_weight: parseNullableNumber(optEl.querySelector('[class$="_option_spawn_weight"]').value, true) ?? 100,
-        display_order: parseNullableNumber(optEl.querySelector('[class$="_option_display_order"]').value, true) ?? ((optionIndex + 1) * 10)
-      };
-
-      const hasContent =
-        opt.option_code ||
-        opt.stat_name ||
-        opt.description_template ||
-        opt.value_min !== null ||
-        opt.value_max !== null ||
-        opt.value2_min !== null ||
-        opt.value2_max !== null;
-
-      if (hasContent) {
-        group.options.push(opt);
-      }
-    });
-
-    const groupHasContent = group.group_code || group.display_label || group.options.length > 0;
-    if (groupHasContent) result.push(group);
-  });
-
-  return result;
-}
-
-// ---------- item code ----------
-async function generateUniqueItemCode(displayName, itemType) {
-  const base = toSlug(displayName);
-  const typePart = toSlug(itemType || "item");
-  const prefix = `${typePart}_${base}`;
-
-  const { data, error } = await supabaseClient
-    .from("items")
-    .select("item_code")
-    .ilike("item_code", `${prefix}%`);
-
-  if (error) throw error;
-
-  const codes = (data || []).map(r => r.item_code);
-  if (!codes.includes(prefix)) return prefix;
-
-  let i = 1;
-  while (codes.includes(`${prefix}_${String(i).padStart(3, "0")}`)) {
-    i++;
-  }
-
-  return `${prefix}_${String(i).padStart(3, "0")}`;
-}
-
-async function refreshCreateAutoFields() {
-  try {
-    const displayName = $("create_display_name").value.trim();
-    const itemType = $("create_item_type").value;
-    const mapping = state.itemTypeMap.get(itemType);
-
-    $("create_equip_slot").value = mapping?.equip_slot || "";
-    $("create_item_code_preview").value = "";
-    $("create_internal_name").value = "";
-
-    if (!displayName || !itemType) {
-      updateCreatePreview();
-      return;
-    }
-
-    const code = await generateUniqueItemCode(displayName, itemType);
-    $("create_item_code_preview").value = code;
-    $("create_internal_name").value = code;
-
-    updateCreatePreview();
-  } catch (err) {
-    showStatus(`Auto item_code konnte nicht berechnet werden:\n${err.message}`, "error");
-  }
-}
-
-function refreshEditDerivedFields() {
-  const itemType = $("edit_item_type").value;
-  const mapping = state.itemTypeMap.get(itemType);
-  $("edit_equip_slot").value = mapping?.equip_slot || "";
-  updateEditPreview();
-}
-
-// ---------- save / update / delete ----------
-async function insertItemWithChildren(baseItem, fixedRows, choiceGroups) {
-  const { data: insertedItem, error: itemError } = await supabaseClient
-    .from("items")
-    .insert(baseItem)
-    .select("id")
-    .single();
-
-  if (itemError) throw itemError;
-
-  const itemId = insertedItem.id;
-
-  if (fixedRows.length > 0) {
-    const payload = fixedRows.map(row => ({
-      item_id: itemId,
-      property_code: row.property_code,
-      property_category: row.property_category,
-      stat_name: row.stat_name,
-      mod_type: row.mod_type,
-      value_min: row.value_min,
-      value_max: row.value_max,
-      value2_min: row.value2_min,
-      value2_max: row.value2_max,
-      description_template: row.description_template,
-      display_order: row.display_order,
-      is_always_present: row.is_always_present
-    }));
-
-    const { error } = await supabaseClient.from("item_fixed_properties").insert(payload);
-    if (error) throw error;
-  }
-
-  for (const group of choiceGroups) {
-    const { data: insertedGroup, error: groupError } = await supabaseClient
-      .from("item_choice_groups")
-      .insert({
-        item_id: itemId,
-        group_code: group.group_code,
-        display_label: group.display_label || group.group_code,
-        property_category: group.property_category,
-        choose_count: group.choose_count,
-        display_order: group.display_order
-      })
-      .select("id")
-      .single();
-
-    if (groupError) throw groupError;
-
-    if (group.options.length > 0) {
-      const optionPayload = group.options.map(opt => ({
-        choice_group_id: insertedGroup.id,
-        option_code: opt.option_code,
-        stat_name: opt.stat_name,
-        mod_type: opt.mod_type,
-        value_min: opt.value_min,
-        value_max: opt.value_max,
-        value2_min: opt.value2_min,
-        value2_max: opt.value2_max,
-        description_template: opt.description_template,
-        spawn_weight: opt.spawn_weight,
-        display_order: opt.display_order
-      }));
-
-      const { error: optionError } = await supabaseClient
-        .from("item_choice_group_options")
-        .insert(optionPayload);
-
-      if (optionError) throw optionError;
-    }
-  }
-
-  return itemId;
-}
-
-async function replaceItemChildren(itemId, fixedRows, choiceGroups) {
-  // choice options -> groups -> fixed -> then reinsert
-  const { data: oldGroups, error: oldGroupsError } = await supabaseClient
-    .from("item_choice_groups")
-    .select("id")
-    .eq("item_id", itemId);
-
-  if (oldGroupsError) throw oldGroupsError;
-
-  const oldGroupIds = (oldGroups || []).map(g => g.id);
-
-  if (oldGroupIds.length > 0) {
-    const { error: deleteOptionsError } = await supabaseClient
-      .from("item_choice_group_options")
-      .delete()
-      .in("choice_group_id", oldGroupIds);
-
-    if (deleteOptionsError) throw deleteOptionsError;
-  }
-
-  const { error: deleteGroupsError } = await supabaseClient
-    .from("item_choice_groups")
-    .delete()
-    .eq("item_id", itemId);
-
-  if (deleteGroupsError) throw deleteGroupsError;
-
-  const { error: deleteFixedError } = await supabaseClient
-    .from("item_fixed_properties")
-    .delete()
-    .eq("item_id", itemId);
-
-  if (deleteFixedError) throw deleteFixedError;
-
-  if (fixedRows.length > 0) {
-    const payload = fixedRows.map(row => ({
-      item_id: itemId,
-      property_code: row.property_code,
-      property_category: row.property_category,
-      stat_name: row.stat_name,
-      mod_type: row.mod_type,
-      value_min: row.value_min,
-      value_max: row.value_max,
-      value2_min: row.value2_min,
-      value2_max: row.value2_max,
-      description_template: row.description_template,
-      display_order: row.display_order,
-      is_always_present: row.is_always_present
-    }));
-
-    const { error } = await supabaseClient.from("item_fixed_properties").insert(payload);
-    if (error) throw error;
-  }
-
-  for (const group of choiceGroups) {
-    const { data: insertedGroup, error: groupError } = await supabaseClient
-      .from("item_choice_groups")
-      .insert({
-        item_id: itemId,
-        group_code: group.group_code,
-        display_label: group.display_label || group.group_code,
-        property_category: group.property_category,
-        choose_count: group.choose_count,
-        display_order: group.display_order
-      })
-      .select("id")
-      .single();
-
-    if (groupError) throw groupError;
-
-    if (group.options.length > 0) {
-      const optionPayload = group.options.map(opt => ({
-        choice_group_id: insertedGroup.id,
-        option_code: opt.option_code,
-        stat_name: opt.stat_name,
-        mod_type: opt.mod_type,
-        value_min: opt.value_min,
-        value_max: opt.value_max,
-        value2_min: opt.value2_min,
-        value2_max: opt.value2_max,
-        description_template: opt.description_template,
-        spawn_weight: opt.spawn_weight,
-        display_order: opt.display_order
-      }));
-
-      const { error: optionError } = await supabaseClient
-        .from("item_choice_group_options")
-        .insert(optionPayload);
-
-      if (optionError) throw optionError;
-    }
-  }
-}
-
-async function createItem() {
-  clearStatus();
-  try {
-    if (!isAllowedUser()) {
-      throw new Error("Du bist nicht für dieses Tool freigeschaltet.");
-    }
-
-    const displayName = $("create_display_name").value.trim();
-    const itemType = $("create_item_type").value;
-
-    if (!displayName) throw new Error("Display Name fehlt.");
-    if (!itemType) throw new Error("Item Type fehlt.");
-
-    const itemCode = $("create_item_code_preview").value.trim() || await generateUniqueItemCode(displayName, itemType);
-
-    const baseItem = collectBaseItemFromCreateForm(itemCode);
-    const fixedRows = collectFixedProperties("createFixedList");
-    const choiceGroups = collectChoiceGroups("createChoiceGroupList");
-
-    await insertItemWithChildren(baseItem, fixedRows, choiceGroups);
-    await loadItemsForList();
-    resetCreateForm();
-
-    showStatus(`Item erfolgreich angelegt:\n${itemCode}`, "ok");
-    setTab("tab-list");
-  } catch (err) {
-    showStatus(`Item anlegen fehlgeschlagen:\n${err.message}`, "error");
-  }
-}
-
-async function updateItem() {
-  clearStatus();
-  try {
-    if (!isAllowedUser()) {
-      throw new Error("Du bist nicht für dieses Tool freigeschaltet.");
-    }
-
-    const itemId = parseInt($("edit_item_id").value, 10);
-    if (!itemId) throw new Error("Keine Item-ID geladen.");
-
-    const baseItem = collectBaseItemFromEditForm();
-    if (!baseItem.display_name) throw new Error("Display Name fehlt.");
-    if (!baseItem.item_code) throw new Error("Item Code fehlt.");
-    if (!baseItem.item_type) throw new Error("Item Type fehlt.");
-
-    const fixedRows = collectFixedProperties("editFixedList");
-    const choiceGroups = collectChoiceGroups("editChoiceGroupList");
-
-    const { error: updateError } = await supabaseClient
-      .from("items")
-      .update(baseItem)
-      .eq("id", itemId);
-
-    if (updateError) throw updateError;
-
-    await replaceItemChildren(itemId, fixedRows, choiceGroups);
-    await loadItemsForList();
-    await openEditItem(itemId);
-
-    showStatus(`Item erfolgreich aktualisiert:\n${baseItem.item_code}`, "ok");
-  } catch (err) {
-    showStatus(`Item aktualisieren fehlgeschlagen:\n${err.message}`, "error");
-  }
-}
-
-async function deleteCurrentItem() {
-  clearStatus();
-  try {
-    if (!isAllowedUser()) {
-      throw new Error("Du bist nicht für dieses Tool freigeschaltet.");
-    }
-
-    const itemId = parseInt($("edit_item_id").value, 10);
-    const itemCode = $("edit_item_code").value.trim();
-
-    if (!itemId) throw new Error("Keine Item-ID geladen.");
-
-    const ok = confirm(`Willst du dieses Item wirklich löschen?\n\n${itemCode}`);
-    if (!ok) return;
-
-    const { data: oldGroups, error: oldGroupsError } = await supabaseClient
-      .from("item_choice_groups")
-      .select("id")
-      .eq("item_id", itemId);
-
-    if (oldGroupsError) throw oldGroupsError;
-
-    const oldGroupIds = (oldGroups || []).map(g => g.id);
-
-    if (oldGroupIds.length > 0) {
-      const { error: deleteOptionsError } = await supabaseClient
-        .from("item_choice_group_options")
-        .delete()
-        .in("choice_group_id", oldGroupIds);
-
-      if (deleteOptionsError) throw deleteOptionsError;
-    }
-
-    const { error: deleteGroupsError } = await supabaseClient
-      .from("item_choice_groups")
-      .delete()
-      .eq("item_id", itemId);
-
-    if (deleteGroupsError) throw deleteGroupsError;
-
-    const { error: deleteFixedError } = await supabaseClient
-      .from("item_fixed_properties")
-      .delete()
-      .eq("item_id", itemId);
-
-    if (deleteFixedError) throw deleteFixedError;
-
-    const { error: deleteItemError } = await supabaseClient
-      .from("items")
-      .delete()
-      .eq("id", itemId);
-
-    if (deleteItemError) throw deleteItemError;
-
-    $("editForm").classList.add("hidden");
-    $("editHint").textContent = "Wähle links ein Item aus.";
-    state.currentEditItem = null;
-
-    await loadItemsForList();
-    showStatus(`Item gelöscht:\n${itemCode}`, "ok");
-  } catch (err) {
-    showStatus(`Item löschen fehlgeschlagen:\n${err.message}`, "error");
-  }
-}
-
-// ---------- fill / reset ----------
-function resetCreateForm() {
-  $("createForm").reset();
-  $("create_binding_mode").value = "tradable";
-  $("create_source_type").value = "drop";
-  $("create_min_sockets").value = 0;
-  $("create_max_sockets").value = 0;
-  $("create_random_primary_min").value = 0;
-  $("create_random_primary_max").value = 0;
-  $("create_random_secondary_min").value = 0;
-  $("create_random_secondary_max").value = 0;
-  $("create_item_code_preview").value = "";
-  $("create_internal_name").value = "";
-  $("create_equip_slot").value = "";
-  $("createFixedList").innerHTML = "";
-  $("createChoiceGroupList").innerHTML = "";
-
-  renderTooltipPreview("createPreviewContent", null);
-}
-
-function fillEditForm(payload) {
-  const item = payload.item;
-
-  $("edit_item_id").value = item.id;
-  $("edit_display_name").value = item.display_name || "";
-  $("edit_rarity").value = item.rarity || "normal";
-  $("edit_item_type").value = item.item_type || "";
-  $("edit_item_code").value = item.item_code || "";
-  $("edit_internal_name").value = item.internal_name || "";
-  $("edit_equip_slot").value = item.equip_slot || "";
-  $("edit_tooltip_archetype").value = item.tooltip_archetype || "";
-  $("edit_level_requirement").value = item.level_requirement ?? 1;
-  $("edit_binding_mode").value = item.binding_mode || "tradable";
-  $("edit_source_type").value = item.source_type || "drop";
-  $("edit_crafted_tier").value = item.crafted_tier ?? "";
-  $("edit_damage_min").value = item.damage_min ?? "";
-  $("edit_damage_max").value = item.damage_max ?? "";
-  $("edit_attacks_per_second").value = item.attacks_per_second ?? "";
-  $("edit_armor_base").value = item.armor_base ?? "";
-  $("edit_block_base").value = item.block_base ?? "";
-  $("edit_min_sockets").value = item.min_sockets ?? 0;
-  $("edit_max_sockets").value = item.max_sockets ?? 0;
-  $("edit_rarity_label").value = item.rarity_label || "";
-  $("edit_random_primary_min").value = item.random_primary_min ?? 0;
-  $("edit_random_primary_max").value = item.random_primary_max ?? 0;
-  $("edit_random_secondary_min").value = item.random_secondary_min ?? 0;
-  $("edit_random_secondary_max").value = item.random_secondary_max ?? 0;
-  $("edit_item_set_code").value = item.item_set_code || "";
-  $("edit_appearance_code").value = item.appearance_code || "";
-  $("edit_description").value = item.description || "";
-  $("edit_flavor_text").value = item.flavor_text || "";
-
-  setCheckbox("edit_is_unique_equipped", item.is_unique_equipped);
-  setCheckbox("edit_can_have_gems", item.can_have_gems);
-  setCheckbox("edit_can_roll_primary_affixes", item.can_roll_primary_affixes);
-  setCheckbox("edit_can_roll_secondary_affixes", item.can_roll_secondary_affixes);
-
-  $("editFixedList").innerHTML = "";
-  payload.fixedRows.forEach(row => {
-    $("editFixedList").insertAdjacentHTML("beforeend", createFixedPropertyHtml("e", row));
-  });
-
-  $("editChoiceGroupList").innerHTML = "";
-  payload.groups.forEach(group => {
-    const groupOptions = payload.options.filter(opt => opt.choice_group_id === group.id);
-    $("editChoiceGroupList").insertAdjacentHTML("beforeend", createChoiceGroupHtml("e", group, groupOptions));
-  });
-
-  bindRepeaterEvents($("editFixedList"));
-  bindRepeaterEvents($("editChoiceGroupList"));
-  updateEditPreview();
-}
-
-// ---------- event wiring ----------
-function wireUi() {
-  $("btnLogin").addEventListener("click", login);
-  $("btnLogout").addEventListener("click", logout);
-
-  document.querySelectorAll(".tab-btn").forEach(btn => {
-    btn.addEventListener("click", () => setTab(btn.dataset.tab));
-  });
-
-  const debouncedCreateAuto = debounce(refreshCreateAutoFields, 250);
-
-  $("create_display_name").addEventListener("input", debouncedCreateAuto);
-  $("create_item_type").addEventListener("change", debouncedCreateAuto);
-
-  $("edit_item_type").addEventListener("change", refreshEditDerivedFields);
-
-  $("btnAddCreateFixed").addEventListener("click", () => {
-    $("createFixedList").insertAdjacentHTML("beforeend", createFixedPropertyHtml("c"));
-    bindRepeaterEvents($("createFixedList"));
-  });
-
-  $("btnAddCreateChoiceGroup").addEventListener("click", () => {
-    $("createChoiceGroupList").insertAdjacentHTML("beforeend", createChoiceGroupHtml("c"));
-    bindRepeaterEvents($("createChoiceGroupList"));
-  });
-
-  $("btnAddEditFixed").addEventListener("click", () => {
-    $("editFixedList").insertAdjacentHTML("beforeend", createFixedPropertyHtml("e"));
-    bindRepeaterEvents($("editFixedList"));
-  });
-
-  $("btnAddEditChoiceGroup").addEventListener("click", () => {
-    $("editChoiceGroupList").insertAdjacentHTML("beforeend", createChoiceGroupHtml("e"));
-    bindRepeaterEvents($("editChoiceGroupList"));
-  });
-
-  $("btnCreateReset").addEventListener("click", resetCreateForm);
-
-  $("createForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    await createItem();
-  });
-
-  $("editForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    await updateItem();
-  });
-
-  $("btnDeleteItem").addEventListener("click", deleteCurrentItem);
-
-  $("list_search").addEventListener("input", renderItemList);
-  $("list_filter_rarity").addEventListener("change", renderItemList);
-  $("list_filter_type").addEventListener("change", renderItemList);
-  $("btnReloadList").addEventListener("click", loadItemsForList);
-
-  $("edit_search").addEventListener("input", debounce(renderEditItemList, 150));
-  wirePreviewEvents();
-}
-
-// ---------- app init ----------
 async function initAppAfterAuth() {
-  console.log("initAppAfterAuth: start");
-
   await getSessionAndProfile();
-  console.log("initAppAfterAuth: after getSessionAndProfile");
 
   if (!state.user) {
-    console.log("initAppAfterAuth: no user -> authCard zeigen");
     $("authCard").classList.remove("hidden");
     $("appShell").classList.add("hidden");
     return;
   }
 
   if (!state.profile) {
-    console.log("initAppAfterAuth: profile fehlt");
-    $("authCard").classList.remove("hidden");
-    $("appShell").classList.add("hidden");
     throw new Error("Kein Profil für diesen Benutzer gefunden.");
   }
 
-  console.log("initAppAfterAuth: user + profile vorhanden", state.user.id, state.profile.id);
-
   if (!isAllowedUser()) {
-    console.log("initAppAfterAuth: user NICHT erlaubt");
     $("authCard").classList.add("hidden");
     $("appShell").classList.add("hidden");
     throw new Error(`Dieser Benutzer darf das Tool nicht verwenden.\n\nErlaubt ist nur Profil-ID:\n${ALLOWED_PROFILE_ID}`);
   }
-
-  console.log("initAppAfterAuth: user erlaubt");
 
   $("authCard").classList.add("hidden");
   $("appShell").classList.remove("hidden");
   $("whoami").textContent = state.user.email || state.user.id;
   $("profileInfo").textContent = `${state.profile.display_name || "-"} (${state.profile.id})`;
 
-  console.log("initAppAfterAuth: vor loadReferenceData");
-  await Promise.race([
-    loadReferenceData(),
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("loadReferenceData Timeout nach 10 Sekunden")), 10000)
-    )
-  ]);
-  console.log("initAppAfterAuth: nach loadReferenceData");
+  await loadReferenceData();
+  await loadItemsForList();
+  renderEditItemList();
+  refreshCreateDerivedFields();
+}
 
-  console.log("initAppAfterAuth: vor loadItemsForList");
-  await Promise.race([
-    loadItemsForList(),
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("loadItemsForList Timeout nach 10 Sekunden")), 10000)
-    )
-  ]);
-  console.log("initAppAfterAuth: nach loadItemsForList");
+function switchTab(tabId) {
+  document.querySelectorAll(".tab-panel").forEach(p => p.classList.add("hidden"));
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+  $(tabId).classList.remove("hidden");
+  document.querySelector(`.tab-btn[data-tab="${tabId}"]`)?.classList.add("active");
+}
 
-  console.log("initAppAfterAuth: vor refreshCreateAutoFields");
-  await Promise.race([
-    refreshCreateAutoFields(),
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("refreshCreateAutoFields Timeout nach 10 Sekunden")), 10000)
-    )
-  ]);
-  console.log("initAppAfterAuth: fertig");
+function wireCreateEvents() {
+  $("create_display_name").addEventListener("input", async () => {
+    await refreshCreateItemCode();
+    updateCreatePreview();
+  });
+
+  [
+    "create_rarity",
+    "create_damage_min",
+    "create_damage_max",
+    "create_attacks_per_second",
+    "create_armor_min",
+    "create_armor_max",
+    "create_block_base",
+    "create_random_primary_min",
+    "create_random_primary_max",
+    "create_random_secondary_min",
+    "create_random_secondary_max",
+    "create_is_unique_equipped",
+    "create_binding_mode",
+    "create_level_requirement",
+    "create_rarity_label",
+    "create_appearance_code",
+    "create_is_crafted",
+    "create_crafted_by",
+    "create_crafted_tier",
+    "create_has_power",
+    "create_power_description",
+    "create_power_value_min",
+    "create_power_value_max"
+  ].forEach(id => {
+    $(id).addEventListener("input", updateCreatePreview);
+    $(id).addEventListener("change", updateCreatePreview);
+  });
+
+  $("create_has_power").addEventListener("change", () => {
+    $("createPowerBlock").classList.toggle("hidden", !$("create_has_power").checked);
+    updateCreatePreview();
+  });
+
+  $("btnAddCreateAffixModule").onclick = () => {
+    $("createAffixModuleList").insertAdjacentHTML("beforeend", createAffixModuleHtml("create", `m_${Date.now()}`));
+    bindAffixModuleEvents($("createAffixModuleList"), "create");
+    updateCreatePreview();
+  };
+
+  $("btnCreateReset").onclick = () => resetCreateForm();
+
+  $("createForm").onsubmit = async (e) => {
+    e.preventDefault();
+    clearStatus();
+    try {
+      await createItemFromForm();
+    } catch (err) {
+      showStatus(err.message, "error");
+    }
+  };
+}
+
+function wireEditEvents() {
+  [
+    "edit_display_name",
+    "edit_item_code",
+    "edit_rarity",
+    "edit_damage_min",
+    "edit_damage_max",
+    "edit_attacks_per_second",
+    "edit_armor_min",
+    "edit_armor_max",
+    "edit_block_base",
+    "edit_random_primary_min",
+    "edit_random_primary_max",
+    "edit_random_secondary_min",
+    "edit_random_secondary_max",
+    "edit_is_unique_equipped",
+    "edit_binding_mode",
+    "edit_level_requirement",
+    "edit_rarity_label",
+    "edit_appearance_code",
+    "edit_is_crafted",
+    "edit_crafted_by",
+    "edit_crafted_tier",
+    "edit_has_power",
+    "edit_power_description",
+    "edit_power_value_min",
+    "edit_power_value_max"
+  ].forEach(id => {
+    $(id).addEventListener("input", updateEditPreview);
+    $(id).addEventListener("change", updateEditPreview);
+  });
+
+  $("edit_has_power").addEventListener("change", () => {
+    $("editPowerBlock").classList.toggle("hidden", !$("edit_has_power").checked);
+    updateEditPreview();
+  });
+
+  $("btnAddEditAffixModule").onclick = () => {
+    $("editAffixModuleList").insertAdjacentHTML("beforeend", createAffixModuleHtml("edit", `m_${Date.now()}`));
+    bindAffixModuleEvents($("editAffixModuleList"), "edit");
+    updateEditPreview();
+  };
+
+  $("editForm").onsubmit = async (e) => {
+    e.preventDefault();
+    clearStatus();
+    try {
+      await updateCurrentItemFromForm();
+    } catch (err) {
+      showStatus(err.message, "error");
+    }
+  };
+
+  $("btnDeleteItem").onclick = async () => {
+    clearStatus();
+    try {
+      await deleteCurrentItem();
+    } catch (err) {
+      showStatus(err.message, "error");
+    }
+  };
+}
+
+function wireUi() {
+  $("btnLogin").onclick = login;
+  $("btnLogout").onclick = logout;
+
+  document.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.onclick = () => switchTab(btn.dataset.tab);
+  });
+
+  $("list_search").addEventListener("input", debounce(renderItemList, 100));
+  $("list_filter_rarity").addEventListener("change", renderItemList);
+  $("list_filter_item_type").addEventListener("change", renderItemList);
+  $("btnReloadList").onclick = () => loadItemsForList();
+  $("edit_search").addEventListener("input", debounce(renderEditItemList, 100));
+
+  wireCreateEvents();
+  wireEditEvents();
 }
 
 async function init() {
   wireUi();
-
   try {
-    console.log("init: starte initAppAfterAuth beim Laden");
     await initAppAfterAuth();
-    console.log("init: fertig");
   } catch (err) {
-    console.error("init Fehler:", err);
     if (state.user) {
       showStatus(err.message, "error");
     }
@@ -1926,4 +1741,3 @@ async function init() {
 }
 
 init();
-
