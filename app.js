@@ -16,7 +16,7 @@ const state = {
   editItems: [],
   currentEditItem: null
 };
-
+console.log("app.js geladen");
 // ---------- helpers ----------
 function $(id) {
   return document.getElementById(id);
@@ -171,6 +171,7 @@ function isAllowedUser() {
 }
 
 async function login() {
+  console.log("Login geklickt");
   clearStatus();
   try {
     const email = $("login_email").value.trim();
