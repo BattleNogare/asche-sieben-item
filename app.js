@@ -442,24 +442,9 @@ function pushAffixSearchEntry(itemType, entry) {
   state.affixSearchPoolByType.get(itemType).push(entry);
 }
 
-
 function buildAffixSearchPools({ itemRows, fixedRows, groupRows, optionRows }) {
   state.affixSearchPoolByType = new Map();
 
-  const itemIdToType = new Map();
-  (itemRows || []).forEach(item => {
-    itemIdToType.set(idKey(item.id), item.item_type);
-  });
-
-  const groupIdToMeta = new Map();
-  (groupRows || []).forEach(group => {
-    groupIdToMeta.set(idKey(group.id), {
-      item_id: idKey(group.item_id),
-      property_category: group.property_category
-    });
-  });
-
-  // 1) alle bekannten item_types sammeln
   const allKnownItemTypes = new Set();
 
   Object.values(ITEM_STRUCTURE).forEach(subMap => {
@@ -478,7 +463,6 @@ function buildAffixSearchPools({ itemRows, fixedRows, groupRows, optionRows }) {
     if (row?.item_type) allKnownItemTypes.add(row.item_type);
   });
 
-  // 2) affix_definitions + affix_definition_item_types
   for (const itemType of allKnownItemTypes) {
     const allowedSet = state.affixAllowedByType.get(itemType) || new Set();
 
@@ -503,82 +487,13 @@ function buildAffixSearchPools({ itemRows, fixedRows, groupRows, optionRows }) {
     });
   }
 
-  // 3) item_fixed_properties -> item_type
-  (fixedRows || []).forEach(row => {
-    const itemType = itemIdToType.get(idKey(row.item_id));
-    if (!itemType) return;
-
-    pushAffixSearchEntry(itemType, {
-      source: "item_fixed_properties",
-      source_id: idKey(row.id),
-      affix_code: row.property_code || `fixed_${row.id}`,
-      affix_category: row.property_category,
-      stat_name: row.stat_name,
-      mod_type: row.mod_type,
-      value_min: row.value_min,
-      value_max: row.value_max,
-      value2_min: row.value2_min,
-      value2_max: row.value2_max,
-      description_template: row.description_template,
-      sort_order: row.display_order || 9999
-    });
-  });
-
-  // 4) item_choice_group_options -> group -> item -> item_type
-  (optionRows || []).forEach(row => {
-    const meta = groupIdToMeta.get(idKey(row.choice_group_id));
-    if (!meta) return;
-
-    const itemType = itemIdToType.get(idKey(meta.item_id));
-    if (!itemType) return;
-
-    pushAffixSearchEntry(itemType, {
-      source: "item_choice_group_options",
-      source_id: idKey(row.id),
-      affix_code: row.option_code || `choice_${row.id}`,
-      affix_category: meta.property_category,
-      stat_name: row.stat_name,
-      mod_type: row.mod_type,
-      value_min: row.value_min,
-      value_max: row.value_max,
-      value2_min: row.value2_min,
-      value2_max: row.value2_max,
-      description_template: row.description_template,
-      sort_order: row.display_order || 9999
-    });
-  });
-
-  // 5) Dedupe je item_type
   for (const [itemType, rows] of state.affixSearchPoolByType.entries()) {
     const seen = new Map();
 
     rows.forEach(row => {
-      const key = [
-        row.affix_category || "",
-        row.stat_name || "",
-        row.mod_type || "",
-        row.value_min ?? "",
-        row.value_max ?? "",
-        row.value2_min ?? "",
-        row.value2_max ?? "",
-        row.description_template || ""
-      ].join("|");
-
+      const key = idKey(row.source_id);
       if (!seen.has(key)) {
         seen.set(key, row);
-      } else {
-        const oldRow = seen.get(key);
-
-        const sourcePriority = (src) => {
-          if (src === "affix_definitions") return 3;
-          if (src === "item_fixed_properties") return 2;
-          if (src === "item_choice_group_options") return 1;
-          return 0;
-        };
-
-        if (sourcePriority(row.source) > sourcePriority(oldRow.source)) {
-          seen.set(key, row);
-        }
       }
     });
 
@@ -1224,7 +1139,7 @@ function bindAffixModuleEvents(container, prefix) {
           mod.querySelector(".affix-property-category").value,
           mod.querySelector(".affix-search").value || ""
         );
-        const def = ranked.find(d => `${d.source}:${d.source_id}:${d.affix_category}:${d.affix_code}` === String(fixedSelect.value));
+        const def = ranked.find(d => `${d.source}:${idKey(d.source_id)}:${d.affix_category}:${d.affix_code}` === String(fixedSelect.value));
         mod.dataset.fixedManualValues = "";
         if (def) setAffixOverrideFields(mod, def, "fixed-");
         prefix === "create" ? updateCreatePreview() : updateEditPreview();
@@ -1275,7 +1190,7 @@ function bindAffixModuleEvents(container, prefix) {
             mod.querySelector(".affix-property-category").value,
             optionEl.querySelector(".choice-option-search").value || ""
           );
-          const def = ranked.find(d => `${d.source}:${d.source_id}:${d.affix_category}:${d.affix_code}` === String(select.value));
+          const def = ranked.find(d => `${d.source}:${idKey(d.source_id)}:${d.affix_category}:${d.affix_code}` === String(select.value));
           optionEl.dataset.manualValues = "";
           if (def) setAffixOverrideFields(optionEl, def, "choice-");
           prefix === "create" ? updateCreatePreview() : updateEditPreview();
