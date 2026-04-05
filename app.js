@@ -12,6 +12,7 @@ const state = {
   items: [],
   equipSlotItemTypes: [],
   affixDefinitions: [],
+  itemAffixTemplates: [],
   affixAllowedByType: new Map(),
   affixSearchPoolByType: new Map(),
   itemTypeToSlot: new Map(),
@@ -442,7 +443,7 @@ function pushAffixSearchEntry(itemType, entry) {
   state.affixSearchPoolByType.get(itemType).push(entry);
 }
 
-function buildAffixSearchPools({ itemRows, fixedRows, groupRows, optionRows }) {
+function buildAffixSearchPools({ itemRows, fixedRows, groupRows, optionRows, templateRows }) {
   state.affixSearchPoolByType = new Map();
 
   const itemIdToType = new Map();
@@ -482,7 +483,43 @@ function buildAffixSearchPools({ itemRows, fixedRows, groupRows, optionRows }) {
     }
   }
 
-  // 2) item_fixed_properties -> item_type
+  // 2) item_affix_templates -> allowed_slot_groups auf item_type mappen
+  const allKnownItemTypes = new Set([
+    ...Object.keys(Object.fromEntries(state.itemTypeToSlot)),
+    ...Array.from(state.itemTypeToSlot.keys()),
+    ...(itemRows || []).map(x => x.item_type).filter(Boolean)
+  ]);
+
+  for (const itemType of allKnownItemTypes) {
+    const equipSlot = state.itemTypeToSlot.get(itemType) || "";
+    const slotGroups = getTemplateSlotGroupsForItemType(itemType, equipSlot);
+
+    (templateRows || []).forEach(row => {
+      const allowedGroups = Array.isArray(row.allowed_slot_groups)
+        ? row.allowed_slot_groups.map(v => String(v).trim().toLowerCase())
+        : [];
+
+      const matches = allowedGroups.some(g => slotGroups.includes(g));
+      if (!matches) return;
+
+      pushAffixSearchEntry(itemType, {
+        source: "item_affix_templates",
+        source_id: idKey(row.id),
+        affix_code: row.affix_code,
+        affix_category: row.affix_category,
+        stat_name: row.stat_name,
+        mod_type: row.mod_type,
+        value_min: row.value_min,
+        value_max: row.value_max,
+        value2_min: row.value2_min ?? row.min_value ?? null,
+        value2_max: row.value2_max ?? row.max_value ?? null,
+        description_template: row.description_template,
+        sort_order: 5000
+      });
+    });
+  }
+
+  // 3) item_fixed_properties -> item_type
   (fixedRows || []).forEach(row => {
     const itemType = itemIdToType.get(idKey(row.item_id));
     if (!itemType) return;
@@ -503,7 +540,7 @@ function buildAffixSearchPools({ itemRows, fixedRows, groupRows, optionRows }) {
     });
   });
 
-  // 3) item_choice_group_options -> group -> item -> item_type
+  // 4) item_choice_group_options -> group -> item -> item_type
   (optionRows || []).forEach(row => {
     const meta = groupIdToMeta.get(idKey(row.choice_group_id));
     if (!meta) return;
@@ -527,7 +564,7 @@ function buildAffixSearchPools({ itemRows, fixedRows, groupRows, optionRows }) {
     });
   });
 
-  // 4) Dedupe je item_type
+  // 5) Dedupe je item_type
   for (const [itemType, rows] of state.affixSearchPoolByType.entries()) {
     const seen = new Map();
 
@@ -547,7 +584,15 @@ function buildAffixSearchPools({ itemRows, fixedRows, groupRows, optionRows }) {
         seen.set(key, row);
       } else {
         const oldRow = seen.get(key);
-        if (oldRow.source !== "affix_definitions" && row.source === "affix_definitions") {
+
+        const sourcePriority = (src) => {
+          if (src === "affix_definitions") return 3;
+          if (src === "item_affix_templates") return 2;
+          if (src === "item_fixed_properties") return 1;
+          return 0;
+        };
+
+        if (sourcePriority(row.source) > sourcePriority(oldRow.source)) {
           seen.set(key, row);
         }
       }
@@ -558,14 +603,62 @@ function buildAffixSearchPools({ itemRows, fixedRows, groupRows, optionRows }) {
 
   console.log("Affix-Pool gebaut:");
   for (const [itemType, rows] of state.affixSearchPoolByType.entries()) {
-    console.log(itemType, rows.length);
+    const bySource = rows.reduce((acc, row) => {
+      acc[row.source] = (acc[row.source] || 0) + 1;
+      return acc;
+    }, {});
+    console.log(itemType, rows.length, bySource);
   }
+}
+
+function getTemplateSlotGroupsForItemType(itemType, equipSlot = "") {
+  const familyInfo = getFamilyOfItemType(itemType);
+  const family = familyInfo.family;
+
+  const groups = new Set();
+
+  // generische Hauptgruppen
+  if (family === "Waffen") groups.add("weapons");
+  if (family === "Rüstung") groups.add("armor");
+  if (family === "Schmuck") groups.add("jewelry");
+  if (equipSlot === "weapon_off") groups.add("off_hand");
+
+  // feinere Gruppen passend zu item_affix_templates.allowed_slot_groups
+  const armorBySlot = {
+    head: "head",
+    shoulders: "shoulders",
+    chest: "chest",
+    bracers: "bracers",
+    hands: "hands",
+    belt: "belt",
+    legs: "legs",
+    feet: "feet"
+  };
+
+  if (armorBySlot[equipSlot]) {
+    groups.add(armorBySlot[equipSlot]);
+  }
+
+  if (itemType === "shield" || itemType === "crusader_shield") {
+    groups.add("shields");
+    groups.add("off_hand");
+  }
+
+  if (["orb", "quiver", "book"].includes(itemType)) {
+    groups.add("off_hand");
+  }
+
+  // globale Freigabe
+  groups.add("all_slots");
+
+  return Array.from(groups);
 }
 
 async function loadReferenceData() {
   const [
     equipSlotItemTypesRes,
     affixesRes,
+    templateRes,
     rarityRulesRes,
     allowedRowsRes,
     itemRowsRes,
@@ -575,6 +668,7 @@ async function loadReferenceData() {
   ] = await Promise.all([
     supabaseClient.from("equip_slot_item_types").select("*").order("sort_order"),
     supabaseClient.from("affix_definitions").select("*").eq("is_enabled", true).order("sort_order"),
+    supabaseClient.from("item_affix_templates").select("*").eq("is_active", true).order("id"),
     supabaseClient.from("item_rarity_rules").select("*"),
     supabaseClient.from("affix_definition_item_types").select("affix_definition_id,item_type"),
     supabaseClient.from("items").select("id,item_type"),
@@ -585,6 +679,7 @@ async function loadReferenceData() {
 
   if (equipSlotItemTypesRes.error) throw equipSlotItemTypesRes.error;
   if (affixesRes.error) throw affixesRes.error;
+  if (templateRes.error) throw templateRes.error;
   if (rarityRulesRes.error) throw rarityRulesRes.error;
   if (allowedRowsRes.error) throw allowedRowsRes.error;
   if (itemRowsRes.error) throw itemRowsRes.error;
@@ -594,6 +689,7 @@ async function loadReferenceData() {
 
   state.equipSlotItemTypes = equipSlotItemTypesRes.data || [];
   state.affixDefinitions = affixesRes.data || [];
+  state.itemAffixTemplates = templateRes.data || [];
   state.itemRarityRules = rarityRulesRes.data || [];
 
   state.itemTypeToSlot = new Map();
@@ -618,6 +714,7 @@ async function loadReferenceData() {
   });
 
   console.log("AffixDefinitions count:", state.affixDefinitions.length);
+  console.log("ItemAffixTemplates count:", state.itemAffixTemplates.length);
   console.log("Allowed item types:", [...state.affixAllowedByType.keys()].length);
   console.log("Allowed sword_1h IDs:", state.affixAllowedByType.get("sword_1h"));
   console.log("First affix def IDs:", state.affixDefinitions.slice(0, 5).map(x => ({
@@ -630,7 +727,8 @@ async function loadReferenceData() {
     itemRows: itemRowsRes.data || [],
     fixedRows: fixedRowsRes.data || [],
     groupRows: groupRowsRes.data || [],
-    optionRows: optionRowsRes.data || []
+    optionRows: optionRowsRes.data || [],
+    templateRows: state.itemAffixTemplates
   });
 
   populateListTypeFilter();
