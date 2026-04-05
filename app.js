@@ -447,24 +447,27 @@ function buildAffixSearchPools({ itemRows, fixedRows, groupRows, optionRows }) {
 
   const itemIdToType = new Map();
   (itemRows || []).forEach(item => {
-    itemIdToType.set(item.id, item.item_type);
+    itemIdToType.set(idKey(item.id), item.item_type);
   });
 
   const groupIdToMeta = new Map();
   (groupRows || []).forEach(group => {
-    groupIdToMeta.set(group.id, {
-      item_id: group.item_id,
+    groupIdToMeta.set(idKey(group.id), {
+      item_id: idKey(group.item_id),
       property_category: group.property_category
     });
   });
 
+  // 1) affix_definitions + affix_definition_item_types
   for (const def of state.affixDefinitions) {
+    const defId = idKey(def.id);
+
     for (const [itemType, allowedSet] of state.affixAllowedByType.entries()) {
-      if (!allowedSet.has(def.id)) continue;
+      if (!allowedSet.has(defId)) continue;
 
       pushAffixSearchEntry(itemType, {
         source: "affix_definitions",
-        source_id: def.id,
+        source_id: defId,
         affix_code: def.affix_code,
         affix_category: def.affix_category,
         stat_name: def.stat_name,
@@ -479,13 +482,14 @@ function buildAffixSearchPools({ itemRows, fixedRows, groupRows, optionRows }) {
     }
   }
 
+  // 2) item_fixed_properties -> item_type
   (fixedRows || []).forEach(row => {
-    const itemType = itemIdToType.get(row.item_id);
+    const itemType = itemIdToType.get(idKey(row.item_id));
     if (!itemType) return;
 
     pushAffixSearchEntry(itemType, {
       source: "item_fixed_properties",
-      source_id: row.id,
+      source_id: idKey(row.id),
       affix_code: row.property_code || `fixed_${row.id}`,
       affix_category: row.property_category,
       stat_name: row.stat_name,
@@ -499,16 +503,17 @@ function buildAffixSearchPools({ itemRows, fixedRows, groupRows, optionRows }) {
     });
   });
 
+  // 3) item_choice_group_options -> group -> item -> item_type
   (optionRows || []).forEach(row => {
-    const meta = groupIdToMeta.get(row.choice_group_id);
+    const meta = groupIdToMeta.get(idKey(row.choice_group_id));
     if (!meta) return;
 
-    const itemType = itemIdToType.get(meta.item_id);
+    const itemType = itemIdToType.get(idKey(meta.item_id));
     if (!itemType) return;
 
     pushAffixSearchEntry(itemType, {
       source: "item_choice_group_options",
-      source_id: row.id,
+      source_id: idKey(row.id),
       affix_code: row.option_code || `choice_${row.id}`,
       affix_category: meta.property_category,
       stat_name: row.stat_name,
@@ -522,6 +527,7 @@ function buildAffixSearchPools({ itemRows, fixedRows, groupRows, optionRows }) {
     });
   });
 
+  // 4) Dedupe je item_type
   for (const [itemType, rows] of state.affixSearchPoolByType.entries()) {
     const seen = new Map();
 
@@ -548,6 +554,11 @@ function buildAffixSearchPools({ itemRows, fixedRows, groupRows, optionRows }) {
     });
 
     state.affixSearchPoolByType.set(itemType, Array.from(seen.values()));
+  }
+
+  console.log("Affix-Pool gebaut:");
+  for (const [itemType, rows] of state.affixSearchPoolByType.entries()) {
+    console.log(itemType, rows.length);
   }
 }
 
@@ -597,11 +608,23 @@ async function loadReferenceData() {
 
   state.affixAllowedByType = new Map();
   (allowedRowsRes.data || []).forEach(row => {
-    if (!state.affixAllowedByType.has(row.item_type)) {
-      state.affixAllowedByType.set(row.item_type, new Set());
+    const itemType = row.item_type;
+    const affixId = idKey(row.affix_definition_id);
+
+    if (!state.affixAllowedByType.has(itemType)) {
+      state.affixAllowedByType.set(itemType, new Set());
     }
-    state.affixAllowedByType.get(row.item_type).add(row.affix_definition_id);
+    state.affixAllowedByType.get(itemType).add(affixId);
   });
+
+  console.log("AffixDefinitions count:", state.affixDefinitions.length);
+  console.log("Allowed item types:", [...state.affixAllowedByType.keys()].length);
+  console.log("Allowed sword_1h IDs:", state.affixAllowedByType.get("sword_1h"));
+  console.log("First affix def IDs:", state.affixDefinitions.slice(0, 5).map(x => ({
+    raw: x.id,
+    key: idKey(x.id),
+    code: x.affix_code
+  })));
 
   buildAffixSearchPools({
     itemRows: itemRowsRes.data || [],
@@ -613,10 +636,6 @@ async function loadReferenceData() {
   populateListTypeFilter();
   populateFamilySelectors("create");
   populateFamilySelectors("edit");
-
-  console.log("AffixDefinitions:", state.affixDefinitions.length);
-  console.log("AffixAllowedByType:", state.affixAllowedByType);
-  console.log("AffixSearchPoolByType:", state.affixSearchPoolByType);
 }
 
 function populateListTypeFilter() {
@@ -695,6 +714,11 @@ function getAllowedAffixesForItemType(itemType, category = null) {
     if (category && def.affix_category !== category) return false;
     return true;
   });
+}
+
+function idKey(value) {
+  if (value === null || value === undefined) return "";
+  return String(value);
 }
 
 function rankAffixesForItemType(itemType, category = null, search = "") {
@@ -1013,6 +1037,7 @@ function refreshSingleAffixModule(mod, itemType) {
   choiceBlock.classList.toggle("hidden", kind !== "choice_group");
 
   const ranked = rankAffixesForItemType(itemType, category, search);
+  console.log("refreshSingleAffixModule", { itemType, category, search, rankedCount: ranked.length, ranked });
 
   const fixedSelect = mod.querySelector(".affix-select");
   if (fixedSelect) {
@@ -1021,7 +1046,7 @@ function refreshSingleAffixModule(mod, itemType) {
 
     ranked.slice(0, 100).forEach(def => {
       const opt = document.createElement("option");
-      opt.value = `${def.source}:${def.source_id}:${def.affix_category}:${def.affix_code}`;
+      opt.value = `${def.source}:${idKey(def.source_id)}:${def.affix_category}:${def.affix_code}`;
       opt.textContent = `${def.affix_code} | ${def.description_template}`;
       fixedSelect.appendChild(opt);
     });
@@ -1029,14 +1054,14 @@ function refreshSingleAffixModule(mod, itemType) {
     let selectedValue = previous;
     if (!selectedValue && ranked.length) {
       const d = ranked[0];
-      selectedValue = `${d.source}:${d.source_id}:${d.affix_category}:${d.affix_code}`;
+      selectedValue = `${d.source}:${idKey(d.source_id)}:${d.affix_category}:${d.affix_code}`;
     }
 
     fixedSelect.value = selectedValue;
     fixedSelect.dataset.value = selectedValue;
 
     renderTopHits(mod.querySelector(".affix-top-hits"), ranked, (def) => {
-      const value = `${def.source}:${def.source_id}:${def.affix_category}:${def.affix_code}`;
+      const value = `${def.source}:${idKey(def.source_id)}:${def.affix_category}:${def.affix_code}`;
       fixedSelect.value = value;
       fixedSelect.dataset.value = value;
 
@@ -1050,7 +1075,7 @@ function refreshSingleAffixModule(mod, itemType) {
       refreshSingleAffixModule(mod, itemType);
     });
 
-    const selectedDef = ranked.find(d => `${d.source}:${d.source_id}:${d.affix_category}:${d.affix_code}` === String(selectedValue));
+    const selectedDef = ranked.find(d => `${d.source}:${idKey(d.source_id)}:${d.affix_category}:${d.affix_code}` === String(selectedValue));
     if (selectedDef && !mod.dataset.fixedManualValues) {
       setAffixOverrideFields(mod, selectedDef, "fixed-");
     }
@@ -1066,7 +1091,7 @@ function refreshSingleAffixModule(mod, itemType) {
 
     optionRanked.slice(0, 100).forEach(def => {
       const opt = document.createElement("option");
-      opt.value = `${def.source}:${def.source_id}:${def.affix_category}:${def.affix_code}`;
+      opt.value = `${def.source}:${idKey(def.source_id)}:${def.affix_category}:${def.affix_code}`;
       opt.textContent = `${def.affix_code} | ${def.description_template}`;
       select.appendChild(opt);
     });
@@ -1074,21 +1099,21 @@ function refreshSingleAffixModule(mod, itemType) {
     let selectedValue = previous;
     if (!selectedValue && optionRanked.length) {
       const d = optionRanked[0];
-      selectedValue = `${d.source}:${d.source_id}:${d.affix_category}:${d.affix_code}`;
+      selectedValue = `${d.source}:${idKey(d.source_id)}:${d.affix_category}:${d.affix_code}`;
     }
 
     select.value = selectedValue;
     select.dataset.value = selectedValue;
 
     renderTopHits(optionEl.querySelector(".affix-top-hits"), optionRanked, (def) => {
-      const value = `${def.source}:${def.source_id}:${def.affix_category}:${def.affix_code}`;
+      const value = `${def.source}:${idKey(def.source_id)}:${def.affix_category}:${def.affix_code}`;
       select.value = value;
       select.dataset.value = value;
       optionEl.dataset.manualValues = "";
       setAffixOverrideFields(optionEl, def, "choice-");
     });
 
-    const selectedDef = optionRanked.find(d => `${d.source}:${d.source_id}:${d.affix_category}:${d.affix_code}` === String(selectedValue));
+    const selectedDef = optionRanked.find(d => `${d.source}:${idKey(d.source_id)}:${d.affix_category}:${d.affix_code}` === String(selectedValue));
     if (selectedDef && !optionEl.dataset.manualValues) {
       setAffixOverrideFields(optionEl, selectedDef, "choice-");
     }
@@ -1290,7 +1315,7 @@ function collectAffixModules(prefix) {
         mod.querySelector(".affix-search").value || ""
       );
 
-      const def = ranked.find(d => `${d.source}:${d.source_id}:${d.affix_category}:${d.affix_code}` === String(selectValue));
+      const def = ranked.find(d => `${d.source}:${idKey(d.source_id)}:${d.affix_category}:${d.affix_code}` === String(selectValue));
       if (!def) return;
 
       const override = readAffixOverrideFields(mod, "fixed-");
@@ -1343,7 +1368,7 @@ function collectAffixModules(prefix) {
           optEl.querySelector(".choice-option-search").value || ""
         );
 
-        const def = ranked.find(d => `${d.source}:${d.source_id}:${d.affix_category}:${d.affix_code}` === String(selectValue));
+        const def = ranked.find(d => `${d.source}:${idKey(d.source_id)}:${d.affix_category}:${d.affix_code}` === String(selectValue));
         if (!def) return;
 
         const override = readAffixOverrideFields(optEl, "choice-");
@@ -1976,17 +2001,20 @@ function renderEditItemList() {
 function findAffixDefinitionIdByDefinitionLike(row) {
   const scored = state.affixDefinitions.map(def => {
     let score = 0;
-    if (def.stat_name === row.stat_name) score += 500;
-    if (def.mod_type === row.mod_type) score += 300;
+
+    if (String(def.stat_name || "") === String(row.stat_name || "")) score += 500;
+    if (String(def.mod_type || "") === String(row.mod_type || "")) score += 300;
     if (String(def.description_template || "") === String(row.description_template || "")) score += 800;
-    if (def.value_min == row.value_min) score += 100;
-    if (def.value_max == row.value_max) score += 100;
-    if (def.value2_min == row.value2_min) score += 50;
-    if (def.value2_max == row.value2_max) score += 50;
+
+    if (String(def.value_min ?? "") === String(row.value_min ?? "")) score += 100;
+    if (String(def.value_max ?? "") === String(row.value_max ?? "")) score += 100;
+    if (String(def.value2_min ?? "") === String(row.value2_min ?? "")) score += 50;
+    if (String(def.value2_max ?? "") === String(row.value2_max ?? "")) score += 50;
+
     return { def, score };
   }).sort((a, b) => b.score - a.score);
 
-  return scored[0]?.def?.id || "";
+  return idKey(scored[0]?.def?.id || "");
 }
 
 async function loadItemIntoEdit(itemId) {
