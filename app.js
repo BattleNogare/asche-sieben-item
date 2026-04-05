@@ -737,14 +737,21 @@ async function loadReferenceData() {
 }
 
 function populateListTypeFilter() {
-  const select = $("list_filter_item_type");
-  select.innerHTML = `<option value="">alle</option>`;
   const types = [...new Set(state.equipSlotItemTypes.map(r => r.item_type))].sort();
-  types.forEach(type => {
-    const opt = document.createElement("option");
-    opt.value = type;
-    opt.textContent = type;
-    select.appendChild(opt);
+
+  const targets = [
+    $("list_filter_item_type"),
+    $("edit_filter_item_type")
+  ].filter(Boolean);
+
+  targets.forEach(select => {
+    select.innerHTML = `<option value="">alle</option>`;
+    types.forEach(type => {
+      const opt = document.createElement("option");
+      opt.value = type;
+      opt.textContent = type;
+      select.appendChild(opt);
+    });
   });
 }
 
@@ -2033,26 +2040,29 @@ async function loadItemsForList() {
   const { data, error } = await supabaseClient.from("items").select("*").order("display_name");
   if (error) throw error;
   state.items = data || [];
-  renderItemList();
+  renderEditItemList();
 }
 
-function renderItemList() {
-  const q = $("list_search").value.trim().toLowerCase();
-  const rarity = $("list_filter_rarity").value;
-  const itemType = $("list_filter_item_type").value;
+function renderEditItemList() {
+  const q = $("edit_search").value.trim().toLowerCase();
+  const rarity = $("edit_filter_rarity")?.value || "";
+  const itemType = $("edit_filter_item_type")?.value || "";
 
-  const list = $("itemList");
+  const list = $("editItemList");
   list.innerHTML = "";
 
   state.items
     .filter(item => {
       if (rarity && item.rarity !== rarity) return false;
       if (itemType && item.item_type !== itemType) return false;
+
       if (!q) return true;
+
       return (
         String(item.display_name || "").toLowerCase().includes(q) ||
         String(item.item_code || "").toLowerCase().includes(q) ||
-        String(item.item_type || "").toLowerCase().includes(q)
+        String(item.item_type || "").toLowerCase().includes(q) ||
+        String(item.rarity || "").toLowerCase().includes(q)
       );
     })
     .forEach(item => {
@@ -2063,32 +2073,6 @@ function renderItemList() {
         <div class="pill">${escapeHtml(item.rarity)}</div>
         <div class="pill">${escapeHtml(item.item_type)}</div>
         <div class="pill">${escapeHtml(item.equip_slot || "-")}</div>
-        <div class="muted" style="margin-top:8px;">${escapeHtml(item.item_code)}</div>
-      `;
-      list.appendChild(card);
-    });
-}
-
-function renderEditItemList() {
-  const q = $("edit_search").value.trim().toLowerCase();
-  const list = $("editItemList");
-  list.innerHTML = "";
-
-  state.items
-    .filter(item => {
-      if (!q) return true;
-      return (
-        String(item.display_name || "").toLowerCase().includes(q) ||
-        String(item.item_code || "").toLowerCase().includes(q)
-      );
-    })
-    .forEach(item => {
-      const card = document.createElement("div");
-      card.className = "item-card";
-      card.innerHTML = `
-        <div class="item-title">${escapeHtml(item.display_name)}</div>
-        <div class="pill">${escapeHtml(item.rarity)}</div>
-        <div class="pill">${escapeHtml(item.item_type)}</div>
         <div class="muted" style="margin-top:8px;">${escapeHtml(item.item_code)}</div>
       `;
       card.onclick = () => loadItemIntoEdit(item.id);
@@ -2478,11 +2462,24 @@ function wireUi() {
     btn.onclick = () => switchTab(btn.dataset.tab);
   });
 
-  $("list_search").addEventListener("input", debounce(renderItemList, 100));
-  $("list_filter_rarity").addEventListener("change", renderItemList);
-  $("list_filter_item_type").addEventListener("change", renderItemList);
-  $("btnReloadList").onclick = () => loadItemsForList();
-  $("edit_search").addEventListener("input", debounce(renderEditItemList, 100));
+  if ($("edit_search")) {
+    $("edit_search").addEventListener("input", debounce(renderEditItemList, 100));
+  }
+
+  if ($("edit_filter_rarity")) {
+    $("edit_filter_rarity").addEventListener("change", renderEditItemList);
+  }
+
+  if ($("edit_filter_item_type")) {
+    $("edit_filter_item_type").addEventListener("change", renderEditItemList);
+  }
+
+  if ($("btnReloadEditList")) {
+    $("btnReloadEditList").onclick = async () => {
+      await loadItemsForList();
+      renderEditItemList();
+    };
+  }
 
   wireCreateEvents();
   wireEditEvents();
