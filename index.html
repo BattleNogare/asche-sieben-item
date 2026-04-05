@@ -396,8 +396,7 @@
 
       <div class="tabs">
         <button class="tab-btn active" data-tab="tab-create">Item anlegen</button>
-        <button class="tab-btn" data-tab="tab-list">Items anzeigen</button>
-        <button class="tab-btn" data-tab="tab-edit">Item bearbeiten</button>
+        <button class="tab-btn" data-tab="tab-edit">Item anzeigen/bearbeiten</button>
       </div>
 
       <div id="tab-create" class="tab-panel">
@@ -613,51 +612,44 @@
         </div>
       </div>
 
-      <div id="tab-list" class="tab-panel hidden">
-        <div class="card">
-          <h2>Items anzeigen</h2>
-          <div class="row">
-            <div class="field col-4">
-              <label for="list_search">Suche</label>
-              <input id="list_search" type="text" />
-            </div>
-            <div class="field col-3">
-              <label for="list_filter_rarity">Rarity</label>
-              <select id="list_filter_rarity">
-                <option value="">alle</option>
-                <option value="normal">normal</option>
-                <option value="magic">magic</option>
-                <option value="rare">rare</option>
-                <option value="legendary">legendary</option>
-                <option value="unique">unique</option>
-                <option value="unreal">unreal</option>
-              </select>
-            </div>
-            <div class="field col-3">
-              <label for="list_filter_item_type">Item Type</label>
-              <select id="list_filter_item_type">
-                <option value="">alle</option>
-              </select>
-            </div>
-            <div class="field col-2">
-              <label>&nbsp;</label>
-              <button id="btnReloadList">Neu laden</button>
-            </div>
-          </div>
-          <div id="itemList" class="item-list"></div>
-        </div>
-      </div>
-
       <div id="tab-edit" class="tab-panel hidden">
         <div class="split">
-          <div class="card sticky">
-            <h2>Items</h2>
-            <div class="field">
-              <label for="edit_search">Suche</label>
-              <input id="edit_search" type="text" />
-            </div>
-            <div id="editItemList" class="item-list" style="grid-template-columns:1fr; margin-top:12px;"></div>
-          </div>
+<div class="card sticky">
+  <h2>Items</h2>
+
+  <div class="row">
+    <div class="field col-12">
+      <label for="edit_search">Suche</label>
+      <input id="edit_search" type="text" />
+    </div>
+
+    <div class="field col-6">
+      <label for="edit_filter_rarity">Rarity</label>
+      <select id="edit_filter_rarity">
+        <option value="">alle</option>
+        <option value="normal">normal</option>
+        <option value="magic">magic</option>
+        <option value="rare">rare</option>
+        <option value="legendary">legendary</option>
+        <option value="unique">unique</option>
+        <option value="unreal">unreal</option>
+      </select>
+    </div>
+
+    <div class="field col-6">
+      <label for="edit_filter_item_type">Item Type</label>
+      <select id="edit_filter_item_type">
+        <option value="">alle</option>
+      </select>
+    </div>
+
+    <div class="field col-12">
+      <button id="btnReloadEditList" type="button">Neu laden</button>
+    </div>
+  </div>
+
+  <div id="editItemList" class="item-list" style="grid-template-columns:1fr; margin-top:12px;"></div>
+</div>
 
           <div class="card">
             <div class="editor-layout">
