@@ -48,7 +48,7 @@ const ITEM_STRUCTURE = {
       { label: "Bogen", item_type: "bow" },
       { label: "Armbrust", item_type: "crossbow" },
       { label: "Handarmbrust (nur für Ranger)", item_type: "hand_crossbow" },
-      { label: "Zauberstäbe (nur für Mage)", item_type: "wand" }
+      { label: "Zauberstab (nur für Mage)", item_type: "wand" }
     ]
   },
   "Rüstung": {
@@ -94,16 +94,16 @@ const ITEM_STRUCTURE = {
     "Schild": [
       { label: "Schild", item_type: "shield" }
     ],
-    "Kreuzritterschild (nur für Crusader)": [
+    "Kreuzritterschild": [
       { label: "Kreuzritterschild (nur für Crusader)", item_type: "crusader_shield" }
     ],
-    "Kugel (nur für Mage)": [
+    "Kugel": [
       { label: "Kugel (nur für Mage)", item_type: "orb" }
     ],
-    "Köcher (nur für Ranger)": [
+    "Köcher": [
       { label: "Köcher (nur für Ranger)", item_type: "quiver" }
     ],
-    "Buch (nur für Necromancer)": [
+    "Buch": [
       { label: "Buch (nur für Necromancer)", item_type: "book" }
     ]
   },
@@ -118,24 +118,90 @@ const ITEM_STRUCTURE = {
     ]
   },
   "Begleiter-Special": {
-    "Fokus (nur für Begleiter 1)": [
-      { label: "Fokus (nur für Begleiter 1)", item_type: "companion_focus" }
+    "Fokus": [
+      { label: "Fokus", item_type: "companion_focus" }
     ],
-    "Marke (nur für Begleiter 2)": [
-      { label: "Marke (nur für Begleiter 2)", item_type: "companion_mark" }
+    "Marke": [
+      { label: "Marke", item_type: "companion_mark" }
     ],
-    "Relikt (nur für Begleiter 3)": [
-      { label: "Relikt (nur für Begleiter 3)", item_type: "companion_relic" }
+    "Relikt": [
+      { label: "Relikt", item_type: "companion_relic" }
     ]
   }
 };
+
+const CANONICAL_AFFIX_CODES = new Set([
+  "mainstat_strength_primary",
+  "mainstat_dexterity_primary",
+  "mainstat_intelligence_primary",
+  "vitality_primary",
+
+  "flat_damage_primary",
+  "damage_percent_primary",
+  "attack_speed_primary",
+  "crit_chance_primary",
+  "crit_damage_primary",
+  "cooldown_reduction_primary",
+  "resource_cost_reduction_primary",
+  "resource_regen_primary",
+  "area_damage_primary",
+  "elite_damage_primary",
+  "life_on_hit_primary",
+  "life_percent_primary",
+  "life_per_second_primary",
+  "armor_primary",
+  "all_resistance_primary",
+  "movement_speed_primary",
+  "block_chance_primary",
+
+  "socket_1_primary",
+  "socket_2_primary",
+  "socket_3_primary",
+
+  "pickup_radius_1_2",
+  "healing_globe_bonus",
+  "resist_single_121_140",
+  "resist_single_141_160",
+  "resource_on_rage_spend",
+  "life_after_kill_secondary",
+  "max_resource_secondary",
+  "ranged_damage_reduction_secondary",
+  "melee_damage_reduction_secondary",
+  "reduced_level_requirement_secondary",
+  "bleed_secondary",
+  "physical_resist_secondary",
+  "lightning_resist_secondary",
+  "fire_resist_secondary",
+  "cold_resist_secondary",
+  "arcane_resist_secondary",
+  "poison_resist_secondary",
+  "ignore_durability_loss_secondary",
+  "experience_per_kill_secondary",
+  "gold_find_secondary",
+  "thorns_secondary",
+  "cc_duration_reduction_secondary",
+  "globe_potion_bonus_secondary",
+  "on_hit_knockback_secondary",
+  "on_hit_freeze_secondary",
+  "on_hit_blind_secondary",
+  "on_hit_chill_secondary",
+  "on_hit_slow_secondary",
+  "on_hit_immobilize_secondary",
+  "on_hit_stun_secondary"
+]);
 
 function $(id) {
   return document.getElementById(id);
 }
 
+function idKey(value) {
+  if (value === null || value === undefined) return "";
+  return String(value);
+}
+
 function showStatus(message, type = "info") {
   const box = $("statusBox");
+  if (!box) return;
   box.textContent = message;
   box.className = `status ${type}`;
   box.classList.remove("hidden");
@@ -143,6 +209,7 @@ function showStatus(message, type = "info") {
 
 function clearStatus() {
   const box = $("statusBox");
+  if (!box) return;
   box.textContent = "";
   box.className = "status info hidden";
 }
@@ -193,36 +260,44 @@ function normalizeForSearch(value) {
     .replace(/geschiklichkeit/g, "geschicklichkeit")
     .replace(/kritischer trefferschaden/g, "krit trefferschaden")
     .replace(/kritische trefferchance/g, "krit trefferchance")
+    .replace(/abklingzeitreduktion/g, "cooldown reduction")
     .replace(/abklingzeiten/g, "cooldown")
-    .replace(/ressourcenkosten/g, "resource")
+    .replace(/ressourcenkostenreduktion/g, "resource cost reduction")
+    .replace(/ressourcenkosten/g, "resource cost")
     .replace(/angriffsgeschwindigkeit/g, "attack speed")
-    .replace(/flaechenschaden/g, "flaechenschaden")
-    .replace(/flächenschaden/g, "flaechenschaden")
+    .replace(/flaechenschaden/g, "area damage")
+    .replace(/flächenschaden/g, "area damage")
     .replace(/leben pro treffer/g, "life on hit")
-    .replace(/leben pro getoetetem gegner/g, "life on kill")
-    .replace(/leben pro getötetem gegner/g, "life on kill")
-    .replace(/widerstand gegen alle schadensarten/g, "all resistance")
+    .replace(/leben pro sekunde/g, "life per second")
+    .replace(/leben in prozent/g, "life percent")
+    .replace(/leben in %/g, "life percent")
     .replace(/bewegungsgeschwindigkeit/g, "movement speed")
+    .replace(/widerstand gegen alle schadensarten/g, "all resistance")
+    .replace(/alle widerstaende/g, "all resistance")
+    .replace(/alle widerstände/g, "all resistance")
+    .replace(/einzelwiderstand/g, "single resistance")
+    .replace(/widerstand/g, "resistance")
+    .replace(/goldfund/g, "gold find")
+    .replace(/goldaufnahme reichweite/g, "pickup radius")
+    .replace(/goldaufnahme-reichweite/g, "pickup radius")
+    .replace(/aufnahmeradius/g, "pickup radius")
+    .replace(/kontrollverlustdauer/g, "cc reduction")
+    .replace(/kontrollverlusteffekte/g, "cc reduction")
+    .replace(/fernkampfschaden reduziert/g, "ranged damage reduction")
+    .replace(/nahkampfschaden reduziert/g, "melee damage reduction")
+    .replace(/bonus erfahrung/g, "bonus experience")
+    .replace(/erfahrung pro kill/g, "bonus experience")
     .replace(/dornenschaden/g, "thorns")
     .replace(/sockel/g, "socket")
-    .replace(/intelligenz/g, "intelligence")
+    .replace(/r\u00fcstung/g, "armor")
+    .replace(/ruestung/g, "armor")
+    .replace(/blockchance/g, "block chance")
     .replace(/staerke/g, "strength")
     .replace(/stärke/g, "strength")
     .replace(/geschicklichkeit/g, "dexterity")
+    .replace(/intelligenz/g, "intelligence")
     .replace(/vitalitaet/g, "vitality")
     .replace(/vitalität/g, "vitality")
-    .replace(/ruestung/g, "armor")
-    .replace(/rüstung/g, "armor")
-    .replace(/blockchance/g, "block chance")
-    .replace(/schaden gegen elitegegner/g, "elite damage")
-    .replace(/ressource/g, "resource")
-    .replace(/heiligschaden/g, "holy damage")
-    .replace(/arkanschaden/g, "arcane damage")
-    .replace(/kaelteschaden/g, "cold damage")
-    .replace(/kälteschaden/g, "cold damage")
-    .replace(/blitzschaden/g, "lightning damage")
-    .replace(/giftschaden/g, "poison damage")
-    .replace(/feuerschaden/g, "fire damage")
     .replace(/schaden/g, "damage")
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
@@ -232,7 +307,11 @@ function levenshtein(a, b) {
   a = normalizeForSearch(a);
   b = normalizeForSearch(b);
 
+  if (!a) return b.length;
+  if (!b) return a.length;
+
   const matrix = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
+
   for (let i = 0; i <= a.length; i++) matrix[i][0] = i;
   for (let j = 0; j <= b.length; j++) matrix[0][j] = j;
 
@@ -250,6 +329,22 @@ function levenshtein(a, b) {
   return matrix[a.length][b.length];
 }
 
+function isCanonicalAffix(def) {
+  if (!def) return false;
+  return CANONICAL_AFFIX_CODES.has(String(def.affix_code || ""));
+}
+
+function getAffixDisplayLabel(def) {
+  if (!def) return "";
+
+  const code = String(def.affix_code || "");
+  if (code === "socket_1_primary") return "(1) Sockel";
+  if (code === "socket_2_primary") return "(2) Sockel";
+  if (code === "socket_3_primary") return "(3) Sockel";
+
+  return String(def.description_template || def.affix_code || "").trim();
+}
+
 function fuzzyScoreAffix(def, query) {
   const q = normalizeForSearch(query);
   if (!q) return 0;
@@ -263,19 +358,19 @@ function fuzzyScoreAffix(def, query) {
 
   if (desc === q) score += 2000;
   if (stat === q) score += 1800;
-  if (code === q) score += 1400;
+  if (code === q) score += 1500;
 
-  if (desc.includes(q)) score += 950;
-  if (stat.includes(q)) score += 800;
-  if (code.includes(q)) score += 600;
-  if (category.includes(q)) score += 250;
+  if (desc.includes(q)) score += 1000;
+  if (stat.includes(q)) score += 900;
+  if (code.includes(q)) score += 700;
+  if (category.includes(q)) score += 200;
 
   const qTokens = q.split(" ").filter(Boolean);
   for (const token of qTokens) {
     if (desc.includes(token)) score += 180;
-    if (stat.includes(token)) score += 140;
-    if (code.includes(token)) score += 100;
-    if (category.includes(token)) score += 40;
+    if (stat.includes(token)) score += 150;
+    if (code.includes(token)) score += 130;
+    if (category.includes(token)) score += 30;
   }
 
   const descDistance = levenshtein(q, desc);
@@ -283,10 +378,8 @@ function fuzzyScoreAffix(def, query) {
   const codeDistance = levenshtein(q, code);
 
   score += Math.max(0, 220 - descDistance * 8);
-  score += Math.max(0, 150 - statDistance * 10);
-  score += Math.max(0, 90 - codeDistance * 7);
-
-  if (def.source === "affix_definitions") score += 50;
+  score += Math.max(0, 170 - statDistance * 10);
+  score += Math.max(0, 120 - codeDistance * 8);
 
   return score;
 }
@@ -338,7 +431,7 @@ function buildRarityLabelFallback(rarity, itemType) {
     orb: "Kugel",
     quiver: "Köcher",
     book: "Buch",
-    helmet: "Kopfschutz",
+    helmet: "Helm",
     soulstone: "Kraftstein",
     mask: "Maske",
     hat: "Hut",
@@ -409,6 +502,7 @@ async function generateUniqueItemCode(displayName, itemType, existingItemId = nu
     tries += 1;
     code = `${base}_${tries + 1}`;
   }
+
   return `${base}_${Date.now()}`;
 }
 
@@ -442,9 +536,7 @@ function pushAffixSearchEntry(itemType, entry) {
   state.affixSearchPoolByType.get(itemType).push(entry);
 }
 
-function buildAffixSearchPools({ itemRows, fixedRows, groupRows, optionRows }) {
-  state.affixSearchPoolByType = new Map();
-
+function getAllKnownItemTypes() {
   const allKnownItemTypes = new Set();
 
   Object.values(ITEM_STRUCTURE).forEach(subMap => {
@@ -459,14 +551,23 @@ function buildAffixSearchPools({ itemRows, fixedRows, groupRows, optionRows }) {
     if (row?.item_type) allKnownItemTypes.add(row.item_type);
   });
 
-  (itemRows || []).forEach(row => {
-    if (row?.item_type) allKnownItemTypes.add(row.item_type);
+  state.items.forEach(item => {
+    if (item?.item_type) allKnownItemTypes.add(item.item_type);
   });
 
-  for (const itemType of allKnownItemTypes) {
+  return Array.from(allKnownItemTypes);
+}
+
+function buildAffixSearchPools() {
+  state.affixSearchPoolByType = new Map();
+
+  const allKnownItemTypes = getAllKnownItemTypes();
+
+  allKnownItemTypes.forEach(itemType => {
     const allowedSet = state.affixAllowedByType.get(itemType) || new Set();
 
     state.affixDefinitions.forEach(def => {
+      if (!isCanonicalAffix(def)) return;
       const defId = idKey(def.id);
       if (!allowedSet.has(defId)) return;
 
@@ -482,23 +583,47 @@ function buildAffixSearchPools({ itemRows, fixedRows, groupRows, optionRows }) {
         value2_min: def.value2_min,
         value2_max: def.value2_max,
         description_template: def.description_template,
-        sort_order: def.sort_order || 9999
+        sort_order: def.sort_order || 9999,
+        rolls_socket_count: !!def.rolls_socket_count,
+        socket_count_min: def.socket_count_min,
+        socket_count_max: def.socket_count_max
       });
     });
-  }
+  });
 
   for (const [itemType, rows] of state.affixSearchPoolByType.entries()) {
-    const seen = new Map();
+    const dedupe = new Map();
 
     rows.forEach(row => {
-      const key = idKey(row.source_id);
-      if (!seen.has(key)) {
-        seen.set(key, row);
+      const key = [
+        row.affix_code,
+        row.affix_category,
+        row.stat_name,
+        row.mod_type,
+        row.value_min ?? "",
+        row.value_max ?? "",
+        row.value2_min ?? "",
+        row.value2_max ?? "",
+        row.socket_count_min ?? "",
+        row.socket_count_max ?? ""
+      ].join("|");
+
+      if (!dedupe.has(key)) {
+        dedupe.set(key, row);
       }
     });
 
-    state.affixSearchPoolByType.set(itemType, Array.from(seen.values()));
+    state.affixSearchPoolByType.set(itemType, Array.from(dedupe.values()));
   }
+
+  console.log("AffixDefinitions count:", state.affixDefinitions.length);
+  console.log("Allowed item types:", [...state.affixAllowedByType.keys()].length);
+  console.log("Allowed sword_1h IDs:", state.affixAllowedByType.get("sword_1h"));
+  console.log("First affix def IDs:", state.affixDefinitions.slice(0, 5).map(x => ({
+    raw: x.id,
+    key: idKey(x.id),
+    code: x.affix_code
+  })));
 
   console.log("Affix-Pool gebaut:");
   for (const [itemType, rows] of state.affixSearchPoolByType.entries()) {
@@ -515,33 +640,21 @@ async function loadReferenceData() {
     equipSlotItemTypesRes,
     affixesRes,
     rarityRulesRes,
-    allowedRowsRes,
-    itemRowsRes,
-    fixedRowsRes,
-    groupRowsRes,
-    optionRowsRes
+    allowedRowsRes
   ] = await Promise.all([
-    supabaseClient.from("equip_slot_item_types").select("*").order("sort_order"),
+    supabaseClient.from("equip_slot_item_types").select("*").eq("is_enabled", true).order("sort_order"),
     supabaseClient.from("affix_definitions").select("*").eq("is_enabled", true).order("sort_order"),
     supabaseClient.from("item_rarity_rules").select("*"),
-    supabaseClient.from("affix_definition_item_types").select("affix_definition_id,item_type"),
-    supabaseClient.from("items").select("id,item_type"),
-    supabaseClient.from("item_fixed_properties").select("*"),
-    supabaseClient.from("item_choice_groups").select("id,item_id,property_category"),
-    supabaseClient.from("item_choice_group_options").select("*")
+    supabaseClient.from("affix_definition_item_types").select("affix_definition_id,item_type")
   ]);
 
   if (equipSlotItemTypesRes.error) throw equipSlotItemTypesRes.error;
   if (affixesRes.error) throw affixesRes.error;
   if (rarityRulesRes.error) throw rarityRulesRes.error;
   if (allowedRowsRes.error) throw allowedRowsRes.error;
-  if (itemRowsRes.error) throw itemRowsRes.error;
-  if (fixedRowsRes.error) throw fixedRowsRes.error;
-  if (groupRowsRes.error) throw groupRowsRes.error;
-  if (optionRowsRes.error) throw optionRowsRes.error;
 
   state.equipSlotItemTypes = equipSlotItemTypesRes.data || [];
-  state.affixDefinitions = affixesRes.data || [];
+  state.affixDefinitions = (affixesRes.data || []).filter(isCanonicalAffix);
   state.itemRarityRules = rarityRulesRes.data || [];
 
   state.itemTypeToSlot = new Map();
@@ -554,10 +667,14 @@ async function loadReferenceData() {
     state.rarityRuleMap.set(rule.rarity, rule);
   });
 
+  const canonicalAffixIdSet = new Set(state.affixDefinitions.map(x => idKey(x.id)));
+
   state.affixAllowedByType = new Map();
   (allowedRowsRes.data || []).forEach(row => {
     const itemType = row.item_type;
     const affixId = idKey(row.affix_definition_id);
+
+    if (!canonicalAffixIdSet.has(affixId)) return;
 
     if (!state.affixAllowedByType.has(itemType)) {
       state.affixAllowedByType.set(itemType, new Set());
@@ -565,47 +682,14 @@ async function loadReferenceData() {
     state.affixAllowedByType.get(itemType).add(affixId);
   });
 
-  console.log("AffixDefinitions count:", state.affixDefinitions.length);
-  console.log("Allowed item types:", [...state.affixAllowedByType.keys()].length);
-  console.log("Allowed sword_1h IDs:", state.affixAllowedByType.get("sword_1h"));
-  console.log("First affix def IDs:", state.affixDefinitions.slice(0, 5).map(x => ({
-    raw: x.id,
-    key: idKey(x.id),
-    code: x.affix_code
-  })));
-
-  buildAffixSearchPools({
-    itemRows: itemRowsRes.data || [],
-    fixedRows: fixedRowsRes.data || [],
-    groupRows: groupRowsRes.data || [],
-    optionRows: optionRowsRes.data || []
-  });
-
+  buildAffixSearchPools();
   populateListTypeFilter();
   populateFamilySelectors("create");
   populateFamilySelectors("edit");
 }
 
 function populateListTypeFilter() {
-  const types = new Set();
-
-  Object.values(ITEM_STRUCTURE).forEach(subMap => {
-    Object.values(subMap).forEach(entries => {
-      entries.forEach(entry => {
-        if (entry?.item_type) types.add(entry.item_type);
-      });
-    });
-  });
-
-  state.equipSlotItemTypes.forEach(row => {
-    if (row?.item_type) types.add(row.item_type);
-  });
-
-  state.items.forEach(item => {
-    if (item?.item_type) types.add(item.item_type);
-  });
-
-  const sortedTypes = Array.from(types).sort((a, b) => a.localeCompare(b));
+  const types = getAllKnownItemTypes().sort((a, b) => a.localeCompare(b));
 
   const targets = [
     $("list_filter_item_type"),
@@ -616,14 +700,14 @@ function populateListTypeFilter() {
     const previous = select.value || "";
     select.innerHTML = `<option value="">alle</option>`;
 
-    sortedTypes.forEach(type => {
+    types.forEach(type => {
       const opt = document.createElement("option");
       opt.value = type;
       opt.textContent = type;
       select.appendChild(opt);
     });
 
-    if (sortedTypes.includes(previous)) {
+    if (types.includes(previous)) {
       select.value = previous;
     }
   });
@@ -633,6 +717,7 @@ function populateFamilySelectors(prefix) {
   const familySelect = $(`${prefix}_item_family`);
   const subfamilySelect = $(`${prefix}_item_subfamily`);
   const typeSelect = $(`${prefix}_item_type`);
+  if (!familySelect || !subfamilySelect || !typeSelect) return;
 
   familySelect.innerHTML = "";
   Object.keys(ITEM_STRUCTURE).forEach(family => {
@@ -658,6 +743,7 @@ function populateFamilySelectors(prefix) {
     const family = familySelect.value;
     const sub = subfamilySelect.value;
     typeSelect.innerHTML = "";
+
     const entries = ITEM_STRUCTURE[family]?.[sub] || [];
     entries.forEach(entry => {
       const opt = document.createElement("option");
@@ -665,6 +751,7 @@ function populateFamilySelectors(prefix) {
       opt.textContent = entry.label;
       typeSelect.appendChild(opt);
     });
+
     if (prefix === "create") {
       refreshCreateDerivedFields();
     } else {
@@ -680,11 +767,11 @@ function populateFamilySelectors(prefix) {
 }
 
 function getSelectedFamily(prefix) {
-  return $(`${prefix}_item_family`).value;
+  return $(`${prefix}_item_family`)?.value || "";
 }
 
 function getSelectedItemType(prefix) {
-  return $(`${prefix}_item_type`).value;
+  return $(`${prefix}_item_type`)?.value || "";
 }
 
 function getAllowedAffixesForItemType(itemType, category = null) {
@@ -695,11 +782,6 @@ function getAllowedAffixesForItemType(itemType, category = null) {
   });
 }
 
-function idKey(value) {
-  if (value === null || value === undefined) return "";
-  return String(value);
-}
-
 function rankAffixesForItemType(itemType, category = null, search = "") {
   return getAllowedAffixesForItemType(itemType, category)
     .map(def => ({
@@ -707,23 +789,12 @@ function rankAffixesForItemType(itemType, category = null, search = "") {
       _score: fuzzyScoreAffix(def, search)
     }))
     .sort((a, b) => {
-      if (search.trim()) {
-        if (b._score !== a._score) return b._score - a._score;
+      if (search.trim() && b._score !== a._score) {
+        return b._score - a._score;
       }
-
-      const sourceScore = (src) => {
-        if (src === "affix_definitions") return 2;
-        if (src === "item_fixed_properties") return 1;
-        return 0;
-      };
-      if (sourceScore(b.source) !== sourceScore(a.source)) {
-        return sourceScore(b.source) - sourceScore(a.source);
-      }
-
       if ((a.sort_order || 0) !== (b.sort_order || 0)) {
         return (a.sort_order || 0) - (b.sort_order || 0);
       }
-
       return String(a.affix_code || "").localeCompare(String(b.affix_code || ""));
     });
 }
@@ -733,7 +804,10 @@ function getRarityRule(rarity) {
 }
 
 function applyRarityDefaults(prefix) {
-  const rarity = $(`${prefix}_rarity`).value;
+  const rarityEl = $(`${prefix}_rarity`);
+  if (!rarityEl) return;
+
+  const rarity = rarityEl.value;
   const rule = getRarityRule(rarity);
   if (!rule) return;
 
@@ -769,7 +843,7 @@ function createAffixModuleHtml(prefix, moduleId, data = null) {
         <div class="field col-2">
           <label>Kategorie</label>
           <select class="affix-property-category">
-            <option value="primary" ${data?.property_category === "primary" || !data ? "selected" : ""}>primary</option>
+            <option value="primary" ${data?.property_category === "secondary" ? "" : "selected"}>primary</option>
             <option value="secondary" ${data?.property_category === "secondary" ? "selected" : ""}>secondary</option>
           </select>
         </div>
@@ -782,7 +856,7 @@ function createAffixModuleHtml(prefix, moduleId, data = null) {
         </div>
         <div class="field col-3">
           <label>Suche Affix</label>
-          <input class="affix-search" type="text" placeholder="z.B. Intilligenz, Krit, Leben..." />
+          <input class="affix-search" type="text" placeholder="z.B. Krit, Intilligenz, Leben ..." />
         </div>
         <div class="field col-2">
           <label>&nbsp;</label>
@@ -888,7 +962,7 @@ function createChoiceOptionHtml(data = null) {
       <div class="row">
         <div class="field col-4">
           <label>Suche Affix</label>
-          <input class="choice-option-search" type="text" placeholder="z.B. Intilligenz, Krit..." />
+          <input class="choice-option-search" type="text" placeholder="z.B. Krit, Intilligenz ..." />
         </div>
         <div class="field col-8">
           <label>Top Treffer</label>
@@ -963,8 +1037,8 @@ function renderTopHits(target, ranked, onPick) {
     btn.className = "btn-secondary btn-small";
     btn.style.textAlign = "left";
     btn.style.whiteSpace = "normal";
-    btn.textContent = `${def.description_template} [${def.affix_code}]`;
-    btn.title = `${def.source || "unknown"} | ${def.affix_category || ""} | ${def.stat_name || ""} | ${def.mod_type || ""}`;
+    btn.textContent = `${getAffixDisplayLabel(def)} [${def.affix_code}]`;
+    btn.title = `${def.affix_category || ""} | ${def.stat_name || ""} | ${def.mod_type || ""}`;
     btn.onclick = onPick.bind(null, def);
     target.appendChild(btn);
   });
@@ -981,8 +1055,15 @@ function setAffixOverrideFields(root, def, prefix = "") {
   const modEl = root.querySelector(`.${prefix}mod-type`);
   const descEl = root.querySelector(`.${prefix}desc-template`);
 
-  if (minEl) minEl.value = def.value_min ?? "";
-  if (maxEl) maxEl.value = def.value_max ?? "";
+  const resolvedMin = def.rolls_socket_count
+    ? (def.socket_count_min ?? def.value_min ?? "")
+    : (def.value_min ?? "");
+  const resolvedMax = def.rolls_socket_count
+    ? (def.socket_count_max ?? def.value_max ?? "")
+    : (def.value_max ?? "");
+
+  if (minEl) minEl.value = resolvedMin;
+  if (maxEl) maxEl.value = resolvedMax;
   if (min2El) min2El.value = def.value2_min ?? "";
   if (max2El) max2El.value = def.value2_max ?? "";
   if (statEl) statEl.value = def.stat_name ?? "";
@@ -1016,17 +1097,16 @@ function refreshSingleAffixModule(mod, itemType) {
   choiceBlock.classList.toggle("hidden", kind !== "choice_group");
 
   const ranked = rankAffixesForItemType(itemType, category, search);
-  console.log("refreshSingleAffixModule", { itemType, category, search, rankedCount: ranked.length, ranked });
 
   const fixedSelect = mod.querySelector(".affix-select");
   if (fixedSelect) {
     const previous = fixedSelect.dataset.value || fixedSelect.value || "";
     fixedSelect.innerHTML = `<option value="">- bitte wählen -</option>`;
 
-    ranked.slice(0, 100).forEach(def => {
+    ranked.slice(0, 200).forEach(def => {
       const opt = document.createElement("option");
       opt.value = `${def.source}:${idKey(def.source_id)}:${def.affix_category}:${def.affix_code}`;
-      opt.textContent = `${def.affix_code} | ${def.description_template}`;
+      opt.textContent = `${def.affix_code} | ${getAffixDisplayLabel(def)}`;
       fixedSelect.appendChild(opt);
     });
 
@@ -1065,13 +1145,15 @@ function refreshSingleAffixModule(mod, itemType) {
     const optionRanked = rankAffixesForItemType(itemType, category, optionSearch);
 
     const select = optionEl.querySelector(".choice-option-affix-select");
+    if (!select) return;
+
     const previous = select.dataset.value || select.value || "";
     select.innerHTML = `<option value="">- bitte wählen -</option>`;
 
-    optionRanked.slice(0, 100).forEach(def => {
+    optionRanked.slice(0, 200).forEach(def => {
       const opt = document.createElement("option");
       opt.value = `${def.source}:${idKey(def.source_id)}:${def.affix_category}:${def.affix_code}`;
-      opt.textContent = `${def.affix_code} | ${def.description_template}`;
+      opt.textContent = `${def.affix_code} | ${getAffixDisplayLabel(def)}`;
       select.appendChild(opt);
     });
 
@@ -1100,12 +1182,15 @@ function refreshSingleAffixModule(mod, itemType) {
 }
 
 function refreshAffixModuleSelects(container, itemType) {
+  if (!container) return;
   container.querySelectorAll(".affix-module").forEach(mod => {
     refreshSingleAffixModule(mod, itemType);
   });
 }
 
 function bindAffixModuleEvents(container, prefix) {
+  if (!container) return;
+
   container.querySelectorAll(".affix-module").forEach(mod => {
     mod.querySelector(".btn-remove-affix-module").onclick = () => {
       mod.remove();
@@ -1230,11 +1315,11 @@ function bindAffixModuleEvents(container, prefix) {
 function refreshCreateDerivedFields() {
   const itemType = getSelectedItemType("create");
   const equipSlot = state.itemTypeToSlot.get(itemType) || "";
-  $("create_equip_slot").value = equipSlot;
+  if ($("create_equip_slot")) $("create_equip_slot").value = equipSlot;
 
   const family = getSelectedFamily("create");
-  $("createWeaponBlock").classList.toggle("hidden", family !== "Waffen");
-  $("createArmorBlock").classList.toggle("hidden", family !== "Rüstung");
+  if ($("createWeaponBlock")) $("createWeaponBlock").classList.toggle("hidden", family !== "Waffen");
+  if ($("createArmorBlock")) $("createArmorBlock").classList.toggle("hidden", family !== "Rüstung");
 
   refreshAffixModuleSelects($("createAffixModuleList"), itemType);
   refreshCreateItemCode();
@@ -1244,31 +1329,42 @@ function refreshCreateDerivedFields() {
 function refreshEditDerivedFields() {
   const itemType = getSelectedItemType("edit");
   const equipSlot = state.itemTypeToSlot.get(itemType) || "";
-  $("edit_equip_slot").value = equipSlot;
+  if ($("edit_equip_slot")) $("edit_equip_slot").value = equipSlot;
 
   const family = getSelectedFamily("edit");
-  $("editWeaponBlock").classList.toggle("hidden", family !== "Waffen");
-  $("editArmorBlock").classList.toggle("hidden", family !== "Rüstung");
+  if ($("editWeaponBlock")) $("editWeaponBlock").classList.toggle("hidden", family !== "Waffen");
+  if ($("editArmorBlock")) $("editArmorBlock").classList.toggle("hidden", family !== "Rüstung");
 
   refreshAffixModuleSelects($("editAffixModuleList"), itemType);
   updateEditPreview();
 }
 
 async function refreshCreateItemCode() {
-  const displayName = $("create_display_name").value.trim();
+  const displayName = $("create_display_name")?.value?.trim() || "";
   const itemType = getSelectedItemType("create");
+  const preview = $("create_item_code_preview");
+
+  if (!preview) return;
+
   if (!displayName || !itemType) {
-    $("create_item_code_preview").value = "";
+    preview.value = "";
     return;
   }
+
   const code = await generateUniqueItemCode(displayName, itemType);
-  $("create_item_code_preview").value = code;
+  preview.value = code;
 }
 
 function buildDescriptionFromAffix(def) {
+  if (!def) return "";
   let text = def.description_template || "";
-  const value = def.value_max ?? def.value_min;
-  const value2 = def.value2_max ?? def.value2_min;
+
+  let value = def.value_max ?? def.value_min;
+  let value2 = def.value2_max ?? def.value2_min;
+
+  if (def.mod_type === "socket" || def.rolls_socket_count) {
+    value = def.socket_count_max ?? def.socket_count_min ?? value;
+  }
 
   text = text.replaceAll("{value}", value !== null && value !== undefined ? String(value) : "");
   text = text.replaceAll("{value2}", value2 !== null && value2 !== undefined ? String(value2) : "");
@@ -1278,6 +1374,7 @@ function buildDescriptionFromAffix(def) {
 function collectAffixModules(prefix) {
   const modules = [];
   const root = $(`${prefix}AffixModuleList`);
+  if (!root) return modules;
 
   root.querySelectorAll(".affix-module").forEach((mod, idx) => {
     const kind = mod.querySelector(".affix-module-kind").value;
@@ -1406,11 +1503,20 @@ function buildPreviewHeaderLines(baseItem) {
   if (archetype === "armor") {
     const armorMin = parseNullableNumber(baseItem.armor_min, true);
     const armorMax = parseNullableNumber(baseItem.armor_max, true);
+
     if (armorMin !== null && armorMax !== null) {
       return [`${formatPreviewNumber(armorMin, 0)} - ${formatPreviewNumber(armorMax, 0)}`, "Rüstung"];
     }
+
     const armorBase = parseNullableNumber(baseItem.armor_base, true);
     if (armorBase !== null) return [formatPreviewNumber(armorBase, 0), "Rüstung"];
+  }
+
+  if (baseItem.tooltip_archetype === "offhand") {
+    const block = parseNullableNumber(baseItem.block_base, false);
+    if (block !== null) {
+      return [`${formatPreviewNumber(block, 1)}%`, "Blockchance"];
+    }
   }
 
   return [];
@@ -1438,7 +1544,7 @@ function buildPreviewData(baseItem, modules, powerData) {
       const bucket = mod.property_category === "secondary" ? secondaryLines : primaryLines;
       bucket.push(mod.display_label);
       mod.options.forEach(opt => {
-        bucket.push(` ${buildDescriptionFromAffix(opt.affix_definition)}`);
+        bucket.push(`• ${buildDescriptionFromAffix(opt.affix_definition)}`);
       });
     }
   });
@@ -1471,7 +1577,7 @@ function buildPreviewData(baseItem, modules, powerData) {
     footer.push(`Hergestellt von: ${craftedName}${tier}`);
   }
 
-  if (baseItem.level_requirement) footer.push(String(baseItem.level_requirement));
+  if (baseItem.level_requirement) footer.push(`Benötigte Stufe: ${baseItem.level_requirement}`);
 
   return {
     display_name: baseItem.display_name,
@@ -1540,33 +1646,33 @@ function renderTooltipPreview(targetId, previewData) {
 function collectBaseItemFromCreateForm() {
   const itemType = getSelectedItemType("create");
   const family = getSelectedFamily("create");
-  const equipSlot = $("create_equip_slot").value;
+  const equipSlot = $("create_equip_slot")?.value || "";
 
   return {
-    item_code: $("create_item_code_preview").value.trim(),
-    internal_name: $("create_item_code_preview").value.trim(),
-    display_name: $("create_display_name").value.trim(),
-    rarity: $("create_rarity").value,
+    item_code: $("create_item_code_preview")?.value?.trim() || "",
+    internal_name: $("create_item_code_preview")?.value?.trim() || "",
+    display_name: $("create_display_name")?.value?.trim() || "",
+    rarity: $("create_rarity")?.value || "normal",
     item_type: itemType,
     equip_slot: equipSlot,
-    level_requirement: parseNullableNumber($("create_level_requirement").value, true) || 1,
-    appearance_code: $("create_appearance_code").value.trim() || $("create_item_code_preview").value.trim(),
-    rarity_label: $("create_rarity_label").value.trim(),
-    damage_min: parseNullableNumber($("create_damage_min").value, true),
-    damage_max: parseNullableNumber($("create_damage_max").value, true),
-    attacks_per_second: parseNullableNumber($("create_attacks_per_second").value, false),
-    armor_min: parseNullableNumber($("create_armor_min").value, true),
-    armor_max: parseNullableNumber($("create_armor_max").value, true),
-    block_base: parseNullableNumber($("create_block_base").value, false),
-    random_primary_min: parseNullableNumber($("create_random_primary_min").value, true) || 0,
-    random_primary_max: parseNullableNumber($("create_random_primary_max").value, true) || 0,
-    random_secondary_min: parseNullableNumber($("create_random_secondary_min").value, true) || 0,
-    random_secondary_max: parseNullableNumber($("create_random_secondary_max").value, true) || 0,
-    binding_mode: $("create_binding_mode").value,
-    is_unique_equipped: $("create_is_unique_equipped").checked,
-    source_type: $("create_is_crafted").checked ? "crafted" : "drop",
-    crafted_by: $("create_is_crafted").checked ? $("create_crafted_by").value : null,
-    crafted_tier: $("create_is_crafted").checked ? parseNullableNumber($("create_crafted_tier").value, true) : null,
+    level_requirement: parseNullableNumber($("create_level_requirement")?.value, true) || 1,
+    appearance_code: $("create_appearance_code")?.value?.trim() || $("create_item_code_preview")?.value?.trim() || "",
+    rarity_label: $("create_rarity_label")?.value?.trim() || "",
+    damage_min: parseNullableNumber($("create_damage_min")?.value, true),
+    damage_max: parseNullableNumber($("create_damage_max")?.value, true),
+    attacks_per_second: parseNullableNumber($("create_attacks_per_second")?.value, false),
+    armor_min: parseNullableNumber($("create_armor_min")?.value, true),
+    armor_max: parseNullableNumber($("create_armor_max")?.value, true),
+    block_base: parseNullableNumber($("create_block_base")?.value, false),
+    random_primary_min: parseNullableNumber($("create_random_primary_min")?.value, true) || 0,
+    random_primary_max: parseNullableNumber($("create_random_primary_max")?.value, true) || 0,
+    random_secondary_min: parseNullableNumber($("create_random_secondary_min")?.value, true) || 0,
+    random_secondary_max: parseNullableNumber($("create_random_secondary_max")?.value, true) || 0,
+    binding_mode: $("create_binding_mode")?.value || "tradable",
+    is_unique_equipped: !!$("create_is_unique_equipped")?.checked,
+    source_type: $("create_is_crafted")?.checked ? "crafted" : "drop",
+    crafted_by: $("create_is_crafted")?.checked ? ($("create_crafted_by")?.value || null) : null,
+    crafted_tier: $("create_is_crafted")?.checked ? parseNullableNumber($("create_crafted_tier")?.value, true) : null,
     tooltip_archetype: inferTooltipArchetype(itemType, equipSlot, family)
   };
 }
@@ -1574,43 +1680,43 @@ function collectBaseItemFromCreateForm() {
 function collectBaseItemFromEditForm() {
   const itemType = getSelectedItemType("edit");
   const family = getSelectedFamily("edit");
-  const equipSlot = $("edit_equip_slot").value;
+  const equipSlot = $("edit_equip_slot")?.value || "";
 
   return {
-    item_code: $("edit_item_code").value.trim(),
-    internal_name: $("edit_item_code").value.trim(),
-    display_name: $("edit_display_name").value.trim(),
-    rarity: $("edit_rarity").value,
+    item_code: $("edit_item_code")?.value?.trim() || "",
+    internal_name: $("edit_item_code")?.value?.trim() || "",
+    display_name: $("edit_display_name")?.value?.trim() || "",
+    rarity: $("edit_rarity")?.value || "normal",
     item_type: itemType,
     equip_slot: equipSlot,
-    level_requirement: parseNullableNumber($("edit_level_requirement").value, true) || 1,
-    appearance_code: $("edit_appearance_code").value.trim() || $("edit_item_code").value.trim(),
-    rarity_label: $("edit_rarity_label").value.trim(),
-    damage_min: parseNullableNumber($("edit_damage_min").value, true),
-    damage_max: parseNullableNumber($("edit_damage_max").value, true),
-    attacks_per_second: parseNullableNumber($("edit_attacks_per_second").value, false),
-    armor_min: parseNullableNumber($("edit_armor_min").value, true),
-    armor_max: parseNullableNumber($("edit_armor_max").value, true),
-    block_base: parseNullableNumber($("edit_block_base").value, false),
-    random_primary_min: parseNullableNumber($("edit_random_primary_min").value, true) || 0,
-    random_primary_max: parseNullableNumber($("edit_random_primary_max").value, true) || 0,
-    random_secondary_min: parseNullableNumber($("edit_random_secondary_min").value, true) || 0,
-    random_secondary_max: parseNullableNumber($("edit_random_secondary_max").value, true) || 0,
-    binding_mode: $("edit_binding_mode").value,
-    is_unique_equipped: $("edit_is_unique_equipped").checked,
-    source_type: $("edit_is_crafted").checked ? "crafted" : "drop",
-    crafted_by: $("edit_is_crafted").checked ? $("edit_crafted_by").value : null,
-    crafted_tier: $("edit_is_crafted").checked ? parseNullableNumber($("edit_crafted_tier").value, true) : null,
+    level_requirement: parseNullableNumber($("edit_level_requirement")?.value, true) || 1,
+    appearance_code: $("edit_appearance_code")?.value?.trim() || $("edit_item_code")?.value?.trim() || "",
+    rarity_label: $("edit_rarity_label")?.value?.trim() || "",
+    damage_min: parseNullableNumber($("edit_damage_min")?.value, true),
+    damage_max: parseNullableNumber($("edit_damage_max")?.value, true),
+    attacks_per_second: parseNullableNumber($("edit_attacks_per_second")?.value, false),
+    armor_min: parseNullableNumber($("edit_armor_min")?.value, true),
+    armor_max: parseNullableNumber($("edit_armor_max")?.value, true),
+    block_base: parseNullableNumber($("edit_block_base")?.value, false),
+    random_primary_min: parseNullableNumber($("edit_random_primary_min")?.value, true) || 0,
+    random_primary_max: parseNullableNumber($("edit_random_primary_max")?.value, true) || 0,
+    random_secondary_min: parseNullableNumber($("edit_random_secondary_min")?.value, true) || 0,
+    random_secondary_max: parseNullableNumber($("edit_random_secondary_max")?.value, true) || 0,
+    binding_mode: $("edit_binding_mode")?.value || "tradable",
+    is_unique_equipped: !!$("edit_is_unique_equipped")?.checked,
+    source_type: $("edit_is_crafted")?.checked ? "crafted" : "drop",
+    crafted_by: $("edit_is_crafted")?.checked ? ($("edit_crafted_by")?.value || null) : null,
+    crafted_tier: $("edit_is_crafted")?.checked ? parseNullableNumber($("edit_crafted_tier")?.value, true) : null,
     tooltip_archetype: inferTooltipArchetype(itemType, equipSlot, family)
   };
 }
 
 function collectPowerData(prefix) {
   return {
-    enabled: $(`${prefix}_has_power`).checked,
-    description: $(`${prefix}_power_description`).value.trim(),
-    value_min: parseNullableNumber($(`${prefix}_power_value_min`).value, false),
-    value_max: parseNullableNumber($(`${prefix}_power_value_max`).value, false)
+    enabled: !!$(`${prefix}_has_power`)?.checked,
+    description: $(`${prefix}_power_description`)?.value?.trim() || "",
+    value_min: parseNullableNumber($(`${prefix}_power_value_min`)?.value, false),
+    value_max: parseNullableNumber($(`${prefix}_power_value_max`)?.value, false)
   };
 }
 
@@ -1626,7 +1732,8 @@ function updateCreatePreview() {
 }
 
 function updateEditPreview() {
-  if ($("editForm").classList.contains("hidden")) {
+  const form = $("editForm");
+  if (form && form.classList.contains("hidden")) {
     renderTooltipPreview("editPreviewContent", null);
     return;
   }
@@ -1637,10 +1744,10 @@ function updateEditPreview() {
 }
 
 function resetCreateForm() {
-  $("createForm").reset();
-  $("createAffixModuleList").innerHTML = "";
-  $("create_has_power").checked = false;
-  $("createPowerBlock").classList.add("hidden");
+  $("createForm")?.reset();
+  if ($("createAffixModuleList")) $("createAffixModuleList").innerHTML = "";
+  if ($("create_has_power")) $("create_has_power").checked = false;
+  if ($("createPowerBlock")) $("createPowerBlock").classList.add("hidden");
   populateFamilySelectors("create");
   applyRarityDefaults("create");
   renderTooltipPreview("createPreviewContent", null);
@@ -1859,7 +1966,7 @@ async function createItemFromForm() {
 }
 
 async function updateCurrentItemFromForm() {
-  const itemId = parseNullableNumber($("edit_item_id").value, true);
+  const itemId = parseNullableNumber($("edit_item_id")?.value, true);
   if (!itemId) throw new Error("Kein Item ausgewählt.");
 
   const baseItem = collectBaseItemFromEditForm();
@@ -1878,7 +1985,7 @@ async function updateCurrentItemFromForm() {
 }
 
 async function deleteCurrentItem() {
-  const itemId = parseNullableNumber($("edit_item_id").value, true);
+  const itemId = parseNullableNumber($("edit_item_id")?.value, true);
   if (!itemId) throw new Error("Kein Item ausgewählt.");
   if (!window.confirm("Dieses Item wirklich löschen?")) return;
 
@@ -1900,8 +2007,8 @@ async function deleteCurrentItem() {
   if (error) throw error;
 
   showStatus("Item gelöscht.", "ok");
-  $("editForm").classList.add("hidden");
-  $("editHint").classList.remove("hidden");
+  if ($("editForm")) $("editForm").classList.add("hidden");
+  if ($("editHint")) $("editHint").classList.remove("hidden");
   state.editCurrentItem = null;
   renderTooltipPreview("editPreviewContent", null);
 
@@ -1920,11 +2027,12 @@ async function loadItemsForList() {
 }
 
 function renderEditItemList() {
-  const q = $("edit_search").value.trim().toLowerCase();
+  const q = $("edit_search")?.value?.trim()?.toLowerCase() || "";
   const rarity = $("edit_filter_rarity")?.value || "";
   const itemType = $("edit_filter_item_type")?.value || "";
 
   const list = $("editItemList");
+  if (!list) return;
   list.innerHTML = "";
 
   state.items
@@ -1956,23 +2064,22 @@ function renderEditItemList() {
     });
 }
 
-function findAffixDefinitionIdByDefinitionLike(row) {
-  const scored = state.affixDefinitions.map(def => {
-    let score = 0;
+function findAffixDefinitionLike(row, itemType, propertyCategory) {
+  const ranked = rankAffixesForItemType(itemType, propertyCategory, row.stat_name || row.description_template || "");
 
+  const scored = ranked.map(def => {
+    let score = 0;
     if (String(def.stat_name || "") === String(row.stat_name || "")) score += 500;
     if (String(def.mod_type || "") === String(row.mod_type || "")) score += 300;
     if (String(def.description_template || "") === String(row.description_template || "")) score += 800;
-
     if (String(def.value_min ?? "") === String(row.value_min ?? "")) score += 100;
     if (String(def.value_max ?? "") === String(row.value_max ?? "")) score += 100;
     if (String(def.value2_min ?? "") === String(row.value2_min ?? "")) score += 50;
     if (String(def.value2_max ?? "") === String(row.value2_max ?? "")) score += 50;
-
     return { def, score };
   }).sort((a, b) => b.score - a.score);
 
-  return idKey(scored[0]?.def?.id || "");
+  return scored[0]?.def || null;
 }
 
 async function loadItemIntoEdit(itemId) {
@@ -2011,46 +2118,47 @@ async function loadItemIntoEdit(itemId) {
 function fillEditForm(item, fixedRows, groups, options) {
   state.editCurrentItem = item;
 
-  $("edit_item_id").value = item.id;
-  $("edit_display_name").value = item.display_name || "";
-  $("edit_item_code").value = item.item_code || "";
-  $("edit_rarity").value = item.rarity || "normal";
-  $("edit_level_requirement").value = item.level_requirement || 1;
-  $("edit_appearance_code").value = item.appearance_code || "";
-  $("edit_rarity_label").value = item.rarity_label || "";
-  $("edit_damage_min").value = item.damage_min ?? "";
-  $("edit_damage_max").value = item.damage_max ?? "";
-  $("edit_attacks_per_second").value = item.attacks_per_second ?? "";
-  $("edit_armor_min").value = item.armor_min ?? "";
-  $("edit_armor_max").value = item.armor_max ?? "";
-  $("edit_block_base").value = item.block_base ?? "";
-  $("edit_random_primary_min").value = item.random_primary_min ?? 0;
-  $("edit_random_primary_max").value = item.random_primary_max ?? 0;
-  $("edit_random_secondary_min").value = item.random_secondary_min ?? 0;
-  $("edit_random_secondary_max").value = item.random_secondary_max ?? 0;
-  $("edit_binding_mode").value = item.binding_mode || "tradable";
-  $("edit_is_unique_equipped").checked = !!item.is_unique_equipped;
-  $("edit_is_crafted").checked = item.source_type === "crafted";
-  $("edit_crafted_by").value = item.crafted_by || "";
-  $("edit_crafted_tier").value = item.crafted_tier ?? "";
+  if ($("edit_item_id")) $("edit_item_id").value = item.id;
+  if ($("edit_display_name")) $("edit_display_name").value = item.display_name || "";
+  if ($("edit_item_code")) $("edit_item_code").value = item.item_code || "";
+  if ($("edit_rarity")) $("edit_rarity").value = item.rarity || "normal";
+  if ($("edit_level_requirement")) $("edit_level_requirement").value = item.level_requirement || 1;
+  if ($("edit_appearance_code")) $("edit_appearance_code").value = item.appearance_code || "";
+  if ($("edit_rarity_label")) $("edit_rarity_label").value = item.rarity_label || "";
+  if ($("edit_damage_min")) $("edit_damage_min").value = item.damage_min ?? "";
+  if ($("edit_damage_max")) $("edit_damage_max").value = item.damage_max ?? "";
+  if ($("edit_attacks_per_second")) $("edit_attacks_per_second").value = item.attacks_per_second ?? "";
+  if ($("edit_armor_min")) $("edit_armor_min").value = item.armor_min ?? "";
+  if ($("edit_armor_max")) $("edit_armor_max").value = item.armor_max ?? "";
+  if ($("edit_block_base")) $("edit_block_base").value = item.block_base ?? "";
+  if ($("edit_random_primary_min")) $("edit_random_primary_min").value = item.random_primary_min ?? 0;
+  if ($("edit_random_primary_max")) $("edit_random_primary_max").value = item.random_primary_max ?? 0;
+  if ($("edit_random_secondary_min")) $("edit_random_secondary_min").value = item.random_secondary_min ?? 0;
+  if ($("edit_random_secondary_max")) $("edit_random_secondary_max").value = item.random_secondary_max ?? 0;
+  if ($("edit_binding_mode")) $("edit_binding_mode").value = item.binding_mode || "tradable";
+  if ($("edit_is_unique_equipped")) $("edit_is_unique_equipped").checked = !!item.is_unique_equipped;
+  if ($("edit_is_crafted")) $("edit_is_crafted").checked = item.source_type === "crafted";
+  if ($("edit_crafted_by")) $("edit_crafted_by").value = item.crafted_by || "";
+  if ($("edit_crafted_tier")) $("edit_crafted_tier").value = item.crafted_tier ?? "";
 
   const { family, subfamily } = getFamilyOfItemType(item.item_type);
-  $("edit_item_family").value = family;
-  $("edit_item_family").dispatchEvent(new Event("change"));
-  $("edit_item_subfamily").value = subfamily;
-  $("edit_item_subfamily").dispatchEvent(new Event("change"));
-  $("edit_item_type").value = item.item_type;
-  $("edit_equip_slot").value = item.equip_slot || state.itemTypeToSlot.get(item.item_type) || "";
+  if ($("edit_item_family")) $("edit_item_family").value = family;
+  $("edit_item_family")?.dispatchEvent(new Event("change"));
+  if ($("edit_item_subfamily")) $("edit_item_subfamily").value = subfamily;
+  $("edit_item_subfamily")?.dispatchEvent(new Event("change"));
+  if ($("edit_item_type")) $("edit_item_type").value = item.item_type;
+  if ($("edit_equip_slot")) $("edit_equip_slot").value = item.equip_slot || state.itemTypeToSlot.get(item.item_type) || "";
 
   const powerRow = fixedRows.find(r => r.property_category === "power");
-  $("edit_has_power").checked = !!powerRow;
-  $("editPowerBlock").classList.toggle("hidden", !powerRow);
-  $("edit_power_description").value = powerRow?.description_template || "";
-  $("edit_power_value_min").value = powerRow?.value_min ?? "";
-  $("edit_power_value_max").value = powerRow?.value_max ?? "";
+  if ($("edit_has_power")) $("edit_has_power").checked = !!powerRow;
+  if ($("editPowerBlock")) $("editPowerBlock").classList.toggle("hidden", !powerRow);
+  if ($("edit_power_description")) $("edit_power_description").value = powerRow?.description_template || "";
+  if ($("edit_power_value_min")) $("edit_power_value_min").value = powerRow?.value_min ?? "";
+  if ($("edit_power_value_max")) $("edit_power_value_max").value = powerRow?.value_max ?? "";
 
   const normalFixed = fixedRows.filter(r => r.property_category !== "power");
   const modRoot = $("editAffixModuleList");
+  if (!modRoot) return;
   modRoot.innerHTML = "";
 
   normalFixed.forEach((row, idx) => {
@@ -2061,11 +2169,10 @@ function fillEditForm(item, fixedRows, groups, options) {
     }));
 
     const mod = modRoot.lastElementChild;
-    const affixId = findAffixDefinitionIdByDefinitionLike(row);
-    const foundDef = state.affixDefinitions.find(a => a.id === affixId);
+    const foundDef = findAffixDefinitionLike(row, item.item_type, row.property_category);
 
     if (foundDef) {
-      const value = `${foundDef.source || "affix_definitions"}:${foundDef.id}:${row.property_category}:${foundDef.affix_code}`;
+      const value = `${foundDef.source || "affix_definitions"}:${idKey(foundDef.source_id || foundDef.id)}:${row.property_category}:${foundDef.affix_code}`;
       mod.querySelector(".affix-select").dataset.value = String(value || "");
     }
 
@@ -2102,11 +2209,10 @@ function fillEditForm(item, fixedRows, groups, options) {
         list.insertAdjacentHTML("beforeend", createChoiceOptionHtml({ spawn_weight: opt.spawn_weight }));
         const optionEl = list.lastElementChild;
 
-        const affixId = findAffixDefinitionIdByDefinitionLike(opt);
-        const foundDef = state.affixDefinitions.find(a => a.id === affixId);
+        const foundDef = findAffixDefinitionLike(opt, item.item_type, group.property_category);
 
         if (foundDef) {
-          const value = `${foundDef.source || "affix_definitions"}:${foundDef.id}:${group.property_category}:${foundDef.affix_code}`;
+          const value = `${foundDef.source || "affix_definitions"}:${idKey(foundDef.source_id || foundDef.id)}:${group.property_category}:${foundDef.affix_code}`;
           optionEl.querySelector(".choice-option-affix-select").dataset.value = String(value || "");
         }
 
@@ -2126,16 +2232,16 @@ function fillEditForm(item, fixedRows, groups, options) {
   bindAffixModuleEvents(modRoot, "edit");
   refreshEditDerivedFields();
 
-  $("editForm").classList.remove("hidden");
-  $("editHint").classList.add("hidden");
+  $("editForm")?.classList.remove("hidden");
+  $("editHint")?.classList.add("hidden");
   updateEditPreview();
 }
 
 async function login() {
   clearStatus();
   try {
-    const email = $("login_email").value.trim();
-    const password = $("login_password").value;
+    const email = $("login_email")?.value?.trim() || "";
+    const password = $("login_password")?.value || "";
     if (!email || !password) {
       showStatus("Bitte E-Mail und Passwort eingeben.", "error");
       return;
@@ -2156,16 +2262,16 @@ async function logout() {
   state.session = null;
   state.user = null;
   state.profile = null;
-  $("authCard").classList.remove("hidden");
-  $("appShell").classList.add("hidden");
+  $("authCard")?.classList.remove("hidden");
+  $("appShell")?.classList.add("hidden");
 }
 
 async function initAppAfterAuth() {
   await getSessionAndProfile();
 
   if (!state.user) {
-    $("authCard").classList.remove("hidden");
-    $("appShell").classList.add("hidden");
+    $("authCard")?.classList.remove("hidden");
+    $("appShell")?.classList.add("hidden");
     return;
   }
 
@@ -2174,15 +2280,15 @@ async function initAppAfterAuth() {
   }
 
   if (!isAllowedUser()) {
-    $("authCard").classList.add("hidden");
-    $("appShell").classList.add("hidden");
+    $("authCard")?.classList.add("hidden");
+    $("appShell")?.classList.add("hidden");
     throw new Error(`Dieser Benutzer darf das Tool nicht verwenden.\n\nErlaubt ist nur Profil-ID:\n${ALLOWED_PROFILE_ID}`);
   }
 
-  $("authCard").classList.add("hidden");
-  $("appShell").classList.remove("hidden");
-  $("whoami").textContent = state.user.email || state.user.id;
-  $("profileInfo").textContent = `${state.profile.display_name || "-"} (${state.profile.id})`;
+  $("authCard")?.classList.add("hidden");
+  $("appShell")?.classList.remove("hidden");
+  if ($("whoami")) $("whoami").textContent = state.user.email || state.user.id;
+  if ($("profileInfo")) $("profileInfo").textContent = `${state.profile.display_name || "-"} (${state.profile.id})`;
 
   await loadReferenceData();
   await loadItemsForList();
@@ -2194,12 +2300,12 @@ async function initAppAfterAuth() {
 function switchTab(tabId) {
   document.querySelectorAll(".tab-panel").forEach(p => p.classList.add("hidden"));
   document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
-  $(tabId).classList.remove("hidden");
+  $(tabId)?.classList.remove("hidden");
   document.querySelector(`.tab-btn[data-tab="${tabId}"]`)?.classList.add("active");
 }
 
 function wireCreateEvents() {
-  $("create_display_name").addEventListener("input", async () => {
+  $("create_display_name")?.addEventListener("input", async () => {
     await refreshCreateItemCode();
     updateCreatePreview();
   });
@@ -2229,37 +2335,43 @@ function wireCreateEvents() {
     "create_power_value_min",
     "create_power_value_max"
   ].forEach(id => {
-    $(id).addEventListener("input", updateCreatePreview);
-    $(id).addEventListener("change", updateCreatePreview);
+    $(id)?.addEventListener("input", updateCreatePreview);
+    $(id)?.addEventListener("change", updateCreatePreview);
   });
 
-  $("create_rarity").addEventListener("change", () => {
+  $("create_rarity")?.addEventListener("change", () => {
     applyRarityDefaults("create");
     updateCreatePreview();
   });
 
-  $("create_has_power").addEventListener("change", () => {
-    $("createPowerBlock").classList.toggle("hidden", !$("create_has_power").checked);
+  $("create_has_power")?.addEventListener("change", () => {
+    $("createPowerBlock")?.classList.toggle("hidden", !$("create_has_power")?.checked);
     updateCreatePreview();
   });
 
-  $("btnAddCreateAffixModule").onclick = () => {
-    $("createAffixModuleList").insertAdjacentHTML("beforeend", createAffixModuleHtml("create", `m_${Date.now()}`));
-    bindAffixModuleEvents($("createAffixModuleList"), "create");
-    updateCreatePreview();
-  };
+  if ($("btnAddCreateAffixModule")) {
+    $("btnAddCreateAffixModule").onclick = () => {
+      $("createAffixModuleList")?.insertAdjacentHTML("beforeend", createAffixModuleHtml("create", `m_${Date.now()}`));
+      bindAffixModuleEvents($("createAffixModuleList"), "create");
+      updateCreatePreview();
+    };
+  }
 
-  $("btnCreateReset").onclick = () => resetCreateForm();
+  if ($("btnCreateReset")) {
+    $("btnCreateReset").onclick = () => resetCreateForm();
+  }
 
-  $("createForm").onsubmit = async (e) => {
-    e.preventDefault();
-    clearStatus();
-    try {
-      await createItemFromForm();
-    } catch (err) {
-      showStatus(err.message, "error");
-    }
-  };
+  if ($("createForm")) {
+    $("createForm").onsubmit = async (e) => {
+      e.preventDefault();
+      clearStatus();
+      try {
+        await createItemFromForm();
+      } catch (err) {
+        showStatus(err.message, "error");
+      }
+    };
+  }
 }
 
 function wireEditEvents() {
@@ -2290,65 +2402,63 @@ function wireEditEvents() {
     "edit_power_value_min",
     "edit_power_value_max"
   ].forEach(id => {
-    $(id).addEventListener("input", updateEditPreview);
-    $(id).addEventListener("change", updateEditPreview);
+    $(id)?.addEventListener("input", updateEditPreview);
+    $(id)?.addEventListener("change", updateEditPreview);
   });
 
-  $("edit_rarity").addEventListener("change", () => {
+  $("edit_rarity")?.addEventListener("change", () => {
     applyRarityDefaults("edit");
     updateEditPreview();
   });
 
-  $("edit_has_power").addEventListener("change", () => {
-    $("editPowerBlock").classList.toggle("hidden", !$("edit_has_power").checked);
+  $("edit_has_power")?.addEventListener("change", () => {
+    $("editPowerBlock")?.classList.toggle("hidden", !$("edit_has_power")?.checked);
     updateEditPreview();
   });
 
-  $("btnAddEditAffixModule").onclick = () => {
-    $("editAffixModuleList").insertAdjacentHTML("beforeend", createAffixModuleHtml("edit", `m_${Date.now()}`));
-    bindAffixModuleEvents($("editAffixModuleList"), "edit");
-    updateEditPreview();
-  };
+  if ($("btnAddEditAffixModule")) {
+    $("btnAddEditAffixModule").onclick = () => {
+      $("editAffixModuleList")?.insertAdjacentHTML("beforeend", createAffixModuleHtml("edit", `m_${Date.now()}`));
+      bindAffixModuleEvents($("editAffixModuleList"), "edit");
+      updateEditPreview();
+    };
+  }
 
-  $("editForm").onsubmit = async (e) => {
-    e.preventDefault();
-    clearStatus();
-    try {
-      await updateCurrentItemFromForm();
-    } catch (err) {
-      showStatus(err.message, "error");
-    }
-  };
+  if ($("editForm")) {
+    $("editForm").onsubmit = async (e) => {
+      e.preventDefault();
+      clearStatus();
+      try {
+        await updateCurrentItemFromForm();
+      } catch (err) {
+        showStatus(err.message, "error");
+      }
+    };
+  }
 
-  $("btnDeleteItem").onclick = async () => {
-    clearStatus();
-    try {
-      await deleteCurrentItem();
-    } catch (err) {
-      showStatus(err.message, "error");
-    }
-  };
+  if ($("btnDeleteItem")) {
+    $("btnDeleteItem").onclick = async () => {
+      clearStatus();
+      try {
+        await deleteCurrentItem();
+      } catch (err) {
+        showStatus(err.message, "error");
+      }
+    };
+  }
 }
 
 function wireUi() {
-  $("btnLogin").onclick = login;
-  $("btnLogout").onclick = logout;
+  if ($("btnLogin")) $("btnLogin").onclick = login;
+  if ($("btnLogout")) $("btnLogout").onclick = logout;
 
   document.querySelectorAll(".tab-btn").forEach(btn => {
     btn.onclick = () => switchTab(btn.dataset.tab);
   });
 
-  if ($("edit_search")) {
-    $("edit_search").addEventListener("input", debounce(renderEditItemList, 100));
-  }
-
-  if ($("edit_filter_rarity")) {
-    $("edit_filter_rarity").addEventListener("change", renderEditItemList);
-  }
-
-  if ($("edit_filter_item_type")) {
-    $("edit_filter_item_type").addEventListener("change", renderEditItemList);
-  }
+  $("edit_search")?.addEventListener("input", debounce(renderEditItemList, 100));
+  $("edit_filter_rarity")?.addEventListener("change", renderEditItemList);
+  $("edit_filter_item_type")?.addEventListener("change", renderEditItemList);
 
   if ($("btnReloadEditList")) {
     $("btnReloadEditList").onclick = async () => {
