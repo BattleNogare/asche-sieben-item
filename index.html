@@ -65,8 +65,14 @@
       color: #e8dcc7;
     }
 
-    .muted { color: var(--muted); font-size: 14px; }
-    .hidden { display: none !important; }
+    .muted {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .hidden {
+      display: none !important;
+    }
 
     .row {
       display: grid;
@@ -310,7 +316,9 @@
       cursor: pointer;
     }
 
-    .item-card:hover { border-color: #b1844c; }
+    .item-card:hover {
+      border-color: #b1844c;
+    }
 
     .item-title {
       font-weight: bold;
@@ -347,24 +355,36 @@
     }
 
     @media (max-width: 1400px) {
-      .editor-layout { grid-template-columns: 1fr; }
-      .preview-sticky { position: static; }
+      .editor-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .preview-sticky {
+        position: static;
+      }
     }
 
     @media (max-width: 1100px) {
-      .split { grid-template-columns: 1fr; }
-      .sticky { position: static; }
+      .split {
+        grid-template-columns: 1fr;
+      }
+
+      .sticky {
+        position: static;
+      }
     }
 
     @media (max-width: 800px) {
-      .col-9, .col-8, .col-6, .col-4, .col-3, .col-2 { grid-column: span 12; }
+      .col-9, .col-8, .col-6, .col-4, .col-3, .col-2 {
+        grid-column: span 12;
+      }
     }
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>Item Admin</h1>
-    <p class="muted">Vereinfachter Editor für Items, Affixe, Macht und Meta-Daten.</p>
+    <p class="muted">Editor für Items, Affixe, Meta-Daten und Live-Tooltip-Vorschau.</p>
 
     <div id="statusBox" class="status info hidden"></div>
 
@@ -381,7 +401,7 @@
         </div>
       </div>
       <div class="toolbar">
-        <button id="btnLogin" class="btn-primary">Einloggen</button>
+        <button id="btnLogin" class="btn-primary" type="button">Einloggen</button>
       </div>
     </div>
 
@@ -390,13 +410,13 @@
         <div class="toolbar">
           <div><strong>Angemeldet als:</strong> <span id="whoami">-</span></div>
           <div><strong>Profil:</strong> <span id="profileInfo">-</span></div>
-          <button id="btnLogout" class="btn-secondary">Logout</button>
+          <button id="btnLogout" class="btn-secondary" type="button">Logout</button>
         </div>
       </div>
 
       <div class="tabs">
-        <button class="tab-btn active" data-tab="tab-create">Item anlegen</button>
-        <button class="tab-btn" data-tab="tab-edit">Item anzeigen/bearbeiten</button>
+        <button class="tab-btn active" data-tab="tab-create" type="button">Item anlegen</button>
+        <button class="tab-btn" data-tab="tab-edit" type="button">Item anzeigen / bearbeiten</button>
       </div>
 
       <div id="tab-create" class="tab-panel">
@@ -614,42 +634,42 @@
 
       <div id="tab-edit" class="tab-panel hidden">
         <div class="split">
-<div class="card sticky">
-  <h2>Items</h2>
+          <div class="card sticky">
+            <h2>Items</h2>
 
-  <div class="row">
-    <div class="field col-12">
-      <label for="edit_search">Suche</label>
-      <input id="edit_search" type="text" />
-    </div>
+            <div class="row">
+              <div class="field col-12">
+                <label for="edit_search">Suche</label>
+                <input id="edit_search" type="text" />
+              </div>
 
-    <div class="field col-6">
-      <label for="edit_filter_rarity">Rarity</label>
-      <select id="edit_filter_rarity">
-        <option value="">alle</option>
-        <option value="normal">normal</option>
-        <option value="magic">magic</option>
-        <option value="rare">rare</option>
-        <option value="legendary">legendary</option>
-        <option value="unique">unique</option>
-        <option value="unreal">unreal</option>
-      </select>
-    </div>
+              <div class="field col-6">
+                <label for="edit_filter_rarity">Rarity</label>
+                <select id="edit_filter_rarity">
+                  <option value="">alle</option>
+                  <option value="normal">normal</option>
+                  <option value="magic">magic</option>
+                  <option value="rare">rare</option>
+                  <option value="legendary">legendary</option>
+                  <option value="unique">unique</option>
+                  <option value="unreal">unreal</option>
+                </select>
+              </div>
 
-    <div class="field col-6">
-      <label for="edit_filter_item_type">Item Type</label>
-      <select id="edit_filter_item_type">
-        <option value="">alle</option>
-      </select>
-    </div>
+              <div class="field col-6">
+                <label for="edit_filter_item_type">Item Type</label>
+                <select id="edit_filter_item_type">
+                  <option value="">alle</option>
+                </select>
+              </div>
 
-    <div class="field col-12">
-      <button id="btnReloadEditList" type="button">Neu laden</button>
-    </div>
-  </div>
+              <div class="field col-12">
+                <button id="btnReloadEditList" type="button">Neu laden</button>
+              </div>
+            </div>
 
-  <div id="editItemList" class="item-list" style="grid-template-columns:1fr; margin-top:12px;"></div>
-</div>
+            <div id="editItemList" class="item-list" style="grid-template-columns:1fr; margin-top:12px;"></div>
+          </div>
 
           <div class="card">
             <div class="editor-layout">
