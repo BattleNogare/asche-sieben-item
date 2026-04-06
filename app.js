@@ -985,6 +985,11 @@ function getRarityRule(rarity) {
 
 function getRarityRollBounds(rarity) {
   const rule = getRarityRule(rarity);
+  console.log("RARITY RULE DEBUG", {
+    rarity,
+    rule
+  });
+
   if (!rule) {
     return {
       primaryMin: 0,
@@ -995,10 +1000,41 @@ function getRarityRollBounds(rarity) {
   }
 
   return {
-    primaryMin: rule.primary_min ?? rule.random_primary_min ?? rule.min_primary_affixes ?? rule.primary_affixes_min ?? rule.primary_affix_min ?? 0,
-    primaryMax: rule.primary_max ?? rule.random_primary_max ?? rule.max_primary_affixes ?? rule.primary_affixes_max ?? rule.primary_affix_max ?? 0,
-    secondaryMin: rule.secondary_min ?? rule.random_secondary_min ?? rule.min_secondary_affixes ?? rule.secondary_affixes_min ?? rule.secondary_affix_min ?? 0,
-    secondaryMax: rule.secondary_max ?? rule.random_secondary_max ?? rule.max_secondary_affixes ?? rule.secondary_affixes_max ?? rule.secondary_affix_max ?? 0
+    primaryMin:
+      rule.primary_affix_min ??
+      rule.primary_min ??
+      rule.random_primary_min ??
+      rule.min_primary_affixes ??
+      rule.primary_affixes_min ??
+      rule.primary_affix_min_count ??
+      0,
+
+    primaryMax:
+      rule.primary_affix_max ??
+      rule.primary_max ??
+      rule.random_primary_max ??
+      rule.max_primary_affixes ??
+      rule.primary_affixes_max ??
+      rule.primary_affix_max_count ??
+      0,
+
+    secondaryMin:
+      rule.secondary_affix_min ??
+      rule.secondary_min ??
+      rule.random_secondary_min ??
+      rule.min_secondary_affixes ??
+      rule.secondary_affixes_min ??
+      rule.secondary_affix_min_count ??
+      0,
+
+    secondaryMax:
+      rule.secondary_affix_max ??
+      rule.secondary_max ??
+      rule.random_secondary_max ??
+      rule.max_secondary_affixes ??
+      rule.secondary_affixes_max ??
+      rule.secondary_affix_max_count ??
+      0
   };
 }
 
@@ -1008,10 +1044,23 @@ function applyRarityDefaults(prefix) {
 
   const bounds = getRarityRollBounds(rarityEl.value);
 
-  if ($(`${prefix}_random_primary_min`)) $(`${prefix}_random_primary_min`).value = bounds.primaryMin;
-  if ($(`${prefix}_random_primary_max`)) $(`${prefix}_random_primary_max`).value = bounds.primaryMax;
-  if ($(`${prefix}_random_secondary_min`)) $(`${prefix}_random_secondary_min`).value = bounds.secondaryMin;
-  if ($(`${prefix}_random_secondary_max`)) $(`${prefix}_random_secondary_max`).value = bounds.secondaryMax;
+  if ($(`${prefix}_random_primary_min`)) {
+    $(`${prefix}_random_primary_min`).value = bounds.primaryMin;
+  }
+
+  if ($(`${prefix}_random_primary_max`)) {
+    $(`${prefix}_random_primary_max`).value = bounds.primaryMax;
+  }
+
+  if ($(`${prefix}_random_secondary_min`)) {
+    $(`${prefix}_random_secondary_min`).value = bounds.secondaryMin;
+  }
+
+  if ($(`${prefix}_random_secondary_max`)) {
+    $(`${prefix}_random_secondary_max`).value = bounds.secondaryMax;
+  }
+
+  console.log(`RARITY DEFAULTS APPLIED [${prefix}]`, bounds);
 }
 
 function createTopHitsHtml() {
@@ -1839,13 +1888,24 @@ function buildPreviewData(baseItem, modules, powerData) {
 
   const remainingPrimary = Math.max(
     0,
-    rarityBounds.primaryMax - fixedPrimaryCount - explicitRandomPrimaryCount
+    Number(rarityBounds.primaryMax || 0) - fixedPrimaryCount - explicitRandomPrimaryCount
   );
 
   const remainingSecondary = Math.max(
     0,
-    rarityBounds.secondaryMax - fixedSecondaryCount - explicitRandomSecondaryCount
+    Number(rarityBounds.secondaryMax || 0) - fixedSecondaryCount - explicitRandomSecondaryCount
   );
+
+  console.log("PREVIEW RANDOM REMAINING", {
+    rarity: baseItem.rarity,
+    rarityBounds,
+    fixedPrimaryCount,
+    fixedSecondaryCount,
+    explicitRandomPrimaryCount,
+    explicitRandomSecondaryCount,
+    remainingPrimary,
+    remainingSecondary
+  });
 
   if (remainingPrimary > 0) {
     secondaryLines.push(`+ ${remainingPrimary} zufällige Primary-Eigenschaften`);
