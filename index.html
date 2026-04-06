@@ -7,44 +7,52 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root {
-      --bg: #0a0a0d;
-      --bg-2: #111114;
-      --panel: #171418;
-      --panel-2: #211c22;
-      --panel-3: #0e0c10;
-      --text: #ddd6c8;
-      --muted: #9b9182;
-      --line: #3b3127;
-      --line-2: #5a4635;
-      --accent: #9f7a44;
-      --accent-2: #d2a55f;
-      --danger: #b14a3b;
-      --ok: #6f9a58;
-      --warn: #c8a35a;
-      --info: #6d8bb9;
+      --bg: #07111f;
+      --bg-2: #0b1830;
+      --bg-3: #0d223f;
+      --panel: rgba(10, 22, 42, 0.82);
+      --panel-2: rgba(12, 30, 56, 0.86);
+      --panel-3: rgba(8, 20, 38, 0.92);
+      --text: #d9f3ff;
+      --muted: #8cb7d1;
+      --line: rgba(100, 204, 255, 0.22);
+      --line-2: rgba(130, 232, 255, 0.35);
 
-      --rarity-normal: #d5d0c7;
-      --rarity-magic: #6da9ff;
-      --rarity-rare: #e7d27a;
-      --rarity-legendary: #ff9d3a;
-      --rarity-set: #6bc26b;
+      --accent: #5ce1ff;
+      --accent-2: #7a7bff;
+      --accent-3: #b45cff;
+      --danger: #ff5f7d;
+      --ok: #61ffb2;
+      --warn: #ffd166;
+      --info: #6cb7ff;
 
-      --tooltip-bg-top: rgba(22, 17, 12, 0.97);
-      --tooltip-bg-bottom: rgba(8, 6, 4, 0.98);
-      --tooltip-border: #7b5a2d;
-      --tooltip-power: #ff9d3a;
-      --tooltip-header: #c7b79b;
-      --tooltip-footer: #968b7d;
+      --rarity-normal: #d9f3ff;
+      --rarity-magic: #72b8ff;
+      --rarity-rare: #ffe27a;
+      --rarity-legendary: #ff9f5c;
+      --rarity-set: #7effb2;
+
+      --tooltip-bg-top: rgba(11, 20, 40, 0.96);
+      --tooltip-bg-bottom: rgba(6, 12, 24, 0.98);
+      --tooltip-border: rgba(92, 225, 255, 0.55);
+      --tooltip-power: #b45cff;
+      --tooltip-header: #9be9ff;
+      --tooltip-footer: #9db7ce;
+
+      --shadow-cyan: 0 0 20px rgba(92, 225, 255, 0.18);
+      --shadow-violet: 0 0 22px rgba(180, 92, 255, 0.16);
     }
 
     * { box-sizing: border-box; }
 
     body {
       margin: 0;
-      font-family: Arial, Helvetica, sans-serif;
+      font-family: Inter, Arial, Helvetica, sans-serif;
       background:
-        radial-gradient(circle at top, rgba(70,40,15,0.18), transparent 35%),
-        linear-gradient(180deg, #09090b 0%, #0d0b0e 40%, #0a090b 100%);
+        radial-gradient(circle at 20% 10%, rgba(92, 225, 255, 0.12), transparent 22%),
+        radial-gradient(circle at 80% 12%, rgba(180, 92, 255, 0.14), transparent 22%),
+        radial-gradient(circle at 50% 100%, rgba(122, 123, 255, 0.12), transparent 28%),
+        linear-gradient(180deg, #040b16 0%, #07111f 32%, #09172c 100%);
       color: var(--text);
     }
 
@@ -55,17 +63,27 @@
     }
 
     .card {
-      background: linear-gradient(180deg, rgba(27,22,18,0.96), rgba(17,13,11,0.98));
+      background:
+        linear-gradient(180deg, rgba(15, 30, 56, 0.86), rgba(8, 18, 35, 0.92));
       border: 1px solid var(--line);
-      border-radius: 12px;
+      border-radius: 18px;
       padding: 16px;
       margin-bottom: 16px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.32);
+      box-shadow:
+        0 12px 30px rgba(0, 0, 0, 0.35),
+        inset 0 0 0 1px rgba(255,255,255,0.03),
+        var(--shadow-cyan);
+      backdrop-filter: blur(10px);
     }
 
     h1, h2, h3, h4 {
       margin-top: 0;
-      color: #e8dcc7;
+      color: #ecfbff;
+      letter-spacing: 0.02em;
+    }
+
+    h1 {
+      text-shadow: 0 0 18px rgba(92, 225, 255, 0.25);
     }
 
     h3 {
@@ -109,7 +127,8 @@
 
     label {
       font-size: 13px;
-      color: #b6ab9a;
+      color: #9fdcf2;
+      letter-spacing: 0.02em;
     }
 
     input, select, textarea, button {
@@ -119,10 +138,12 @@
     input, select, textarea {
       width: 100%;
       padding: 10px 12px;
-      background: linear-gradient(180deg, #201b20, #181419);
+      background:
+        linear-gradient(180deg, rgba(13, 28, 52, 0.95), rgba(8, 18, 35, 0.98));
       color: var(--text);
-      border: 1px solid #4a3b2c;
-      border-radius: 8px;
+      border: 1px solid rgba(100, 204, 255, 0.28);
+      border-radius: 12px;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
     }
 
     textarea {
@@ -131,42 +152,55 @@
     }
 
     input[readonly] {
-      opacity: 0.85;
+      opacity: 0.92;
       cursor: default;
+      background:
+        linear-gradient(180deg, rgba(10, 22, 40, 0.9), rgba(7, 16, 30, 0.98));
     }
 
     input:focus, select:focus, textarea:focus {
       outline: none;
-      border-color: #a87b3d;
-      box-shadow: 0 0 0 1px rgba(168,123,61,0.35);
+      border-color: rgba(92, 225, 255, 0.75);
+      box-shadow:
+        0 0 0 1px rgba(92, 225, 255, 0.22),
+        0 0 18px rgba(92, 225, 255, 0.14);
     }
 
     button {
       padding: 10px 14px;
-      border: 1px solid #5b452f;
-      border-radius: 8px;
-      background: linear-gradient(180deg, #33271d, #241c16);
-      color: #eadcc3;
+      border: 1px solid rgba(110, 220, 255, 0.35);
+      border-radius: 12px;
+      background:
+        linear-gradient(180deg, rgba(20, 38, 72, 0.95), rgba(11, 22, 42, 0.98));
+      color: #eafcff;
       cursor: pointer;
+      box-shadow: var(--shadow-cyan);
     }
 
     button:hover {
-      border-color: #b1844c;
-      background: linear-gradient(180deg, #3e2f22, #2a2119);
+      border-color: rgba(130, 232, 255, 0.55);
+      background:
+        linear-gradient(180deg, rgba(25, 48, 92, 0.98), rgba(12, 26, 52, 0.98));
     }
 
     .btn-primary {
-      background: linear-gradient(180deg, #7d5a2f, #593f23);
-      border-color: #b1844c;
+      background:
+        linear-gradient(180deg, rgba(40, 96, 255, 0.92), rgba(86, 44, 255, 0.88));
+      border-color: rgba(144, 170, 255, 0.55);
+      box-shadow:
+        0 0 18px rgba(122, 123, 255, 0.24),
+        0 0 24px rgba(180, 92, 255, 0.16);
     }
 
     .btn-danger {
-      background: linear-gradient(180deg, #7a2e26, #551f1a);
-      border-color: #a34a3d;
+      background:
+        linear-gradient(180deg, rgba(255, 95, 125, 0.88), rgba(176, 42, 86, 0.92));
+      border-color: rgba(255, 145, 165, 0.45);
     }
 
     .btn-secondary {
-      background: linear-gradient(180deg, #332922, #241d19);
+      background:
+        linear-gradient(180deg, rgba(20, 38, 72, 0.95), rgba(10, 20, 38, 0.98));
     }
 
     .btn-small {
@@ -189,23 +223,39 @@
     }
 
     .tab-btn.active {
-      border-color: #d2a55f;
-      background: linear-gradient(180deg, #6e4f2a, #4c371f);
-      color: #fff1d5;
+      border-color: rgba(130, 232, 255, 0.75);
+      background:
+        linear-gradient(180deg, rgba(39, 114, 255, 0.9), rgba(123, 65, 255, 0.9));
+      color: #ffffff;
+      box-shadow:
+        0 0 16px rgba(92, 225, 255, 0.22),
+        0 0 20px rgba(180, 92, 255, 0.16);
     }
 
     .status {
       padding: 10px 12px;
-      border-radius: 8px;
+      border-radius: 12px;
       margin-bottom: 14px;
       font-size: 14px;
       border: 1px solid var(--line);
       white-space: pre-wrap;
+      backdrop-filter: blur(8px);
     }
 
-    .status.info { background: rgba(44,32,22,0.9); }
-    .status.ok { background: rgba(29,52,25,0.9); border-color: #557c44; }
-    .status.error { background: rgba(65,26,24,0.95); border-color: #8b4037; }
+    .status.info {
+      background: rgba(20, 42, 74, 0.72);
+      border-color: rgba(108, 183, 255, 0.38);
+    }
+
+    .status.ok {
+      background: rgba(18, 58, 46, 0.72);
+      border-color: rgba(97, 255, 178, 0.4);
+    }
+
+    .status.error {
+      background: rgba(74, 18, 36, 0.78);
+      border-color: rgba(255, 95, 125, 0.42);
+    }
 
     .editor-layout {
       display: grid;
@@ -222,12 +272,16 @@
 
     .tooltip-preview-shell {
       position: relative;
-      background: linear-gradient(180deg, var(--tooltip-bg-top) 0%, var(--tooltip-bg-bottom) 100%);
+      background:
+        linear-gradient(180deg, var(--tooltip-bg-top) 0%, var(--tooltip-bg-bottom) 100%);
       border: 1px solid var(--tooltip-border);
-      border-radius: 6px;
+      border-radius: 16px;
       min-height: 340px;
-      padding: 16px 18px;
-      box-shadow: 0 0 0 1px rgba(255,180,90,0.10) inset, 0 16px 40px rgba(0,0,0,0.55);
+      padding: 18px 20px;
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,0.03) inset,
+        0 20px 44px rgba(0,0,0,0.42),
+        0 0 24px rgba(92, 225, 255, 0.15);
       overflow: hidden;
     }
 
@@ -235,9 +289,20 @@
       content: "";
       position: absolute;
       inset: 6px;
-      border: 1px solid rgba(180,130,60,0.18);
+      border: 1px solid rgba(130, 232, 255, 0.12);
       pointer-events: none;
-      border-radius: 4px;
+      border-radius: 12px;
+    }
+
+    .tooltip-preview-shell::after {
+      content: "";
+      position: absolute;
+      top: -60px;
+      right: -40px;
+      width: 180px;
+      height: 180px;
+      background: radial-gradient(circle, rgba(92, 225, 255, 0.12), transparent 70%);
+      pointer-events: none;
     }
 
     .tooltip-preview-title {
@@ -245,7 +310,7 @@
       font-weight: bold;
       margin-bottom: 6px;
       line-height: 1.12;
-      text-shadow: 0 0 8px rgba(0,0,0,0.35);
+      text-shadow: 0 0 10px rgba(92, 225, 255, 0.12);
     }
 
     .rarity-normal { color: var(--rarity-normal); }
@@ -258,7 +323,7 @@
       line-height: 1.38;
       white-space: pre-wrap;
       word-break: break-word;
-      color: #d8d0c2;
+      color: #d8f3ff;
     }
 
     .tooltip-section-label {
@@ -267,7 +332,7 @@
       color: var(--tooltip-header);
       font-weight: bold;
       font-size: 13px;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.08em;
       text-transform: uppercase;
     }
 
@@ -275,20 +340,20 @@
     .tooltip-footer { color: var(--tooltip-footer); }
 
     .tooltip-divider {
-      border-top: 1px solid rgba(165,123,55,0.32);
+      border-top: 1px solid rgba(92, 225, 255, 0.18);
       margin: 10px 0;
     }
 
     .preview-meta {
       margin-top: 12px;
       padding-top: 10px;
-      border-top: 1px solid rgba(165,123,55,0.25);
-      color: #8b8172;
+      border-top: 1px solid rgba(92, 225, 255, 0.15);
+      color: #8fb4ca;
       font-size: 12px;
     }
 
     .preview-hint {
-      color: #a79c8a;
+      color: #9ec6da;
       font-size: 13px;
       line-height: 1.4;
     }
@@ -304,24 +369,22 @@
     }
 
     .module-box {
-      border: 1px solid #43352a;
-      background: linear-gradient(180deg, #171318, #100d11);
-      border-radius: 10px;
+      border: 1px solid rgba(92, 225, 255, 0.16);
+      background:
+        linear-gradient(180deg, rgba(13, 27, 52, 0.72), rgba(7, 16, 31, 0.88));
+      border-radius: 16px;
       padding: 12px;
       margin-bottom: 12px;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
     }
 
     .module-mini {
-      border: 1px dashed #5a4635;
-      background: linear-gradient(180deg, #17151a, #100f13);
-      border-radius: 10px;
+      border: 1px dashed rgba(130, 232, 255, 0.22);
+      background:
+        linear-gradient(180deg, rgba(14, 31, 58, 0.62), rgba(8, 18, 34, 0.82));
+      border-radius: 14px;
       padding: 12px;
       margin-top: 10px;
-    }
-
-    .subtle-grid {
-      display: grid;
-      gap: 10px;
     }
 
     .small-note {
@@ -334,30 +397,31 @@
     .error-box,
     .ok-box {
       padding: 10px 12px;
-      border-radius: 10px;
+      border-radius: 12px;
       border: 1px solid var(--line-2);
       margin-bottom: 12px;
       white-space: pre-wrap;
+      backdrop-filter: blur(8px);
     }
 
     .info-box {
-      background: rgba(30, 42, 58, 0.45);
-      border-color: rgba(109, 139, 185, 0.55);
+      background: rgba(22, 48, 78, 0.55);
+      border-color: rgba(108, 183, 255, 0.4);
     }
 
     .warn-box {
-      background: rgba(60, 44, 18, 0.55);
-      border-color: rgba(200, 163, 90, 0.55);
+      background: rgba(82, 60, 20, 0.42);
+      border-color: rgba(255, 209, 102, 0.42);
     }
 
     .error-box {
-      background: rgba(65, 26, 24, 0.55);
-      border-color: rgba(177, 74, 59, 0.55);
+      background: rgba(88, 24, 38, 0.46);
+      border-color: rgba(255, 95, 125, 0.42);
     }
 
     .ok-box {
-      background: rgba(28, 50, 24, 0.55);
-      border-color: rgba(111, 154, 88, 0.55);
+      background: rgba(18, 64, 48, 0.46);
+      border-color: rgba(97, 255, 178, 0.4);
     }
 
     .validation-box {
@@ -371,15 +435,20 @@
     }
 
     .item-card {
-      border: 1px solid #4a3a2e;
-      border-radius: 10px;
-      background: linear-gradient(180deg, #171318, #0e0c10);
+      border: 1px solid rgba(92, 225, 255, 0.18);
+      border-radius: 14px;
+      background:
+        linear-gradient(180deg, rgba(13, 28, 52, 0.78), rgba(7, 16, 30, 0.92));
       padding: 12px;
       cursor: pointer;
+      box-shadow: var(--shadow-cyan);
     }
 
     .item-card:hover {
-      border-color: #b1844c;
+      border-color: rgba(130, 232, 255, 0.45);
+      box-shadow:
+        0 0 18px rgba(92, 225, 255, 0.18),
+        0 0 20px rgba(180, 92, 255, 0.08);
     }
 
     .item-title {
@@ -392,9 +461,9 @@
       font-size: 12px;
       padding: 4px 8px;
       border-radius: 999px;
-      border: 1px solid #51402e;
-      background: #1a1512;
-      color: #c3b59f;
+      border: 1px solid rgba(92, 225, 255, 0.22);
+      background: rgba(12, 30, 56, 0.72);
+      color: #c8efff;
       margin-right: 6px;
       margin-bottom: 6px;
     }
@@ -422,9 +491,10 @@
       align-items: center;
       gap: 8px;
       padding: 10px 12px;
-      border: 1px solid #4a3b2c;
-      border-radius: 8px;
-      background: linear-gradient(180deg, #1c171c, #151116);
+      border: 1px solid rgba(92, 225, 255, 0.18);
+      border-radius: 12px;
+      background:
+        linear-gradient(180deg, rgba(15, 30, 56, 0.72), rgba(8, 18, 34, 0.9));
       min-height: 44px;
     }
 
@@ -432,23 +502,24 @@
       width: auto;
       margin: 0;
       transform: translateY(1px);
+      accent-color: #5ce1ff;
     }
 
     .checkbox-card label {
       font-size: 13px;
-      color: #d2c6b2;
+      color: #d6f6ff;
       cursor: pointer;
       margin: 0;
     }
 
     .form-divider {
       height: 1px;
-      background: linear-gradient(90deg, transparent, rgba(165,123,55,0.35), transparent);
+      background: linear-gradient(90deg, transparent, rgba(92, 225, 255, 0.35), transparent);
       margin: 16px 0;
     }
 
     .inline-help {
-      color: #a99d8d;
+      color: #a7d0e3;
       font-size: 12px;
       line-height: 1.35;
     }
@@ -525,7 +596,6 @@
         <button class="tab-btn" data-tab="tab-edit" type="button">Item anzeigen / bearbeiten</button>
       </div>
 
-      <!-- CREATE TAB -->
       <div id="tab-create" class="tab-panel">
         <div class="editor-layout">
           <div class="card">
@@ -694,23 +764,23 @@
                 <div class="row">
                   <div class="field col-3">
                     <label for="create_random_primary_min">Random Primary Min</label>
-                    <input id="create_random_primary_min" type="number" min="0" value="0" />
+                    <input id="create_random_primary_min" type="number" min="0" value="0" readonly />
                   </div>
                   <div class="field col-3">
                     <label for="create_random_primary_max">Random Primary Max</label>
-                    <input id="create_random_primary_max" type="number" min="0" value="0" />
+                    <input id="create_random_primary_max" type="number" min="0" value="0" readonly />
                   </div>
                   <div class="field col-3">
                     <label for="create_random_secondary_min">Random Secondary Min</label>
-                    <input id="create_random_secondary_min" type="number" min="0" value="0" />
+                    <input id="create_random_secondary_min" type="number" min="0" value="0" readonly />
                   </div>
                   <div class="field col-3">
                     <label for="create_random_secondary_max">Random Secondary Max</label>
-                    <input id="create_random_secondary_max" type="number" min="0" value="0" />
+                    <input id="create_random_secondary_max" type="number" min="0" value="0" readonly />
                   </div>
                 </div>
                 <div class="small-note">
-                  Diese Werte steuern nur die Template-Grenzen für zufällige Rolls und sollten zur Rarity-Logik passen.
+                  Diese Werte werden automatisch aus den item_rarity_rules bestimmt.
                 </div>
               </div>
 
@@ -821,7 +891,6 @@
         </div>
       </div>
 
-      <!-- EDIT TAB -->
       <div id="tab-edit" class="tab-panel hidden">
         <div class="split">
           <div class="card sticky">
@@ -1027,20 +1096,23 @@
                     <div class="row">
                       <div class="field col-3">
                         <label for="edit_random_primary_min">Random Primary Min</label>
-                        <input id="edit_random_primary_min" type="number" min="0" />
+                        <input id="edit_random_primary_min" type="number" min="0" readonly />
                       </div>
                       <div class="field col-3">
                         <label for="edit_random_primary_max">Random Primary Max</label>
-                        <input id="edit_random_primary_max" type="number" min="0" />
+                        <input id="edit_random_primary_max" type="number" min="0" readonly />
                       </div>
                       <div class="field col-3">
                         <label for="edit_random_secondary_min">Random Secondary Min</label>
-                        <input id="edit_random_secondary_min" type="number" min="0" />
+                        <input id="edit_random_secondary_min" type="number" min="0" readonly />
                       </div>
                       <div class="field col-3">
                         <label for="edit_random_secondary_max">Random Secondary Max</label>
-                        <input id="edit_random_secondary_max" type="number" min="0" />
+                        <input id="edit_random_secondary_max" type="number" min="0" readonly />
                       </div>
+                    </div>
+                    <div class="small-note">
+                      Diese Werte werden automatisch aus den item_rarity_rules bestimmt.
                     </div>
                   </div>
 
@@ -1151,8 +1223,7 @@
             </div>
           </div>
         </div>
-      </div>
-      <!-- /EDIT TAB -->
+      </div><!-- /EDIT TAB -->
     </div>
   </div>
 
