@@ -11,17 +11,20 @@ const state = {
 
   items: [],
   equipSlotItemTypes: [],
+  equipSlots: [],
   affixDefinitions: [],
   affixAllowedByType: new Map(),
   affixSearchPoolByType: new Map(),
   itemTypeToSlot: new Map(),
+  itemTypeDefinitions: new Map(),
+
   itemRarityRules: [],
   rarityRuleMap: new Map(),
 
   editCurrentItem: null
 };
 
-const ITEM_STRUCTURE = {
+const FALLBACK_ITEM_STRUCTURE = {
   "Waffen": {
     "Einhand": [
       { label: "Axt", item_type: "axe_1h" },
@@ -29,56 +32,56 @@ const ITEM_STRUCTURE = {
       { label: "Streitkolben", item_type: "mace_1h" },
       { label: "Speer", item_type: "spear" },
       { label: "Schwert", item_type: "sword_1h" },
-      { label: "Zeremonienmesser (nur für Scion)", item_type: "ceremonial_knife" },
-      { label: "Faustwaffe (nur für Rogue)", item_type: "fist_weapon" },
-      { label: "Flegel (nur für Crusader)", item_type: "flail_1h" },
-      { label: "Mächtige Waffe (nur für Berserker)", item_type: "mighty_weapon_1h" },
-      { label: "Sense (nur für Necromancer)", item_type: "scythe_1h" }
+      { label: "Zeremonienmesser", item_type: "ceremonial_knife" },
+      { label: "Faustwaffe", item_type: "fist_weapon" },
+      { label: "Flegel", item_type: "flail_1h" },
+      { label: "Mächtige Waffe", item_type: "mighty_weapon_1h" },
+      { label: "Sense", item_type: "scythe_1h" },
+      { label: "Zauberstab", item_type: "wand" }
     ],
     "Zweihand": [
       { label: "Streitkolben", item_type: "mace_2h" },
       { label: "Stangenwaffe", item_type: "polearm" },
       { label: "Stab", item_type: "staff" },
       { label: "Schwert", item_type: "sword_2h" },
-      { label: "Flegel (nur für Crusader)", item_type: "flail_2h" },
-      { label: "Mächtige Waffe (nur für Berserker)", item_type: "mighty_weapon_2h" },
-      { label: "Sense (nur für Necromancer)", item_type: "scythe_2h" }
+      { label: "Flegel", item_type: "flail_2h" },
+      { label: "Mächtige Waffe", item_type: "mighty_weapon_2h" },
+      { label: "Sense", item_type: "scythe_2h" }
     ],
     "Distanzwaffen": [
       { label: "Bogen", item_type: "bow" },
       { label: "Armbrust", item_type: "crossbow" },
-      { label: "Handarmbrust (nur für Ranger)", item_type: "hand_crossbow" },
-      { label: "Zauberstab (nur für Mage)", item_type: "wand" }
+      { label: "Handarmbrust", item_type: "hand_crossbow" }
     ]
   },
   "Rüstung": {
-    "Head": [
+    "Kopf": [
       { label: "Helm", item_type: "helmet" },
-      { label: "Kraftstein (nur für Necromancer)", item_type: "soulstone" },
-      { label: "Maske (nur für Rogue)", item_type: "mask" },
-      { label: "Hut (nur für Mage)", item_type: "hat" }
+      { label: "Kraftstein", item_type: "soulstone" },
+      { label: "Maske", item_type: "mask" },
+      { label: "Hut", item_type: "hat" }
     ],
-    "Shoulders": [
+    "Schultern": [
       { label: "Schulterpanzer", item_type: "shoulder_armor" }
     ],
-    "Chest": [
+    "Brust": [
       { label: "Brustrüstung", item_type: "chest_armor" },
       { label: "Umhang", item_type: "cloak" }
     ],
-    "Sleeve": [
+    "Arme": [
       { label: "Armschiene", item_type: "bracer" }
     ],
-    "Hand": [
+    "Hände": [
       { label: "Handschuhe", item_type: "gloves" }
     ],
-    "Belt": [
+    "Gürtel": [
       { label: "Gürtel", item_type: "belt" },
-      { label: "Mächtiger Gürtel (nur für Berserker)", item_type: "mighty_belt" }
+      { label: "Mächtiger Gürtel", item_type: "mighty_belt" }
     ],
-    "Legs": [
+    "Beine": [
       { label: "Hose", item_type: "pants" }
     ],
-    "Feet": [
+    "Füße": [
       { label: "Stiefel", item_type: "boots" }
     ]
   },
@@ -90,105 +93,25 @@ const ITEM_STRUCTURE = {
       { label: "Ring", item_type: "ring" }
     ]
   },
-  "Weapon Off": {
-    "Schild": [
-      { label: "Schild", item_type: "shield" }
-    ],
-    "Kreuzritterschild": [
-      { label: "Kreuzritterschild (nur für Crusader)", item_type: "crusader_shield" }
-    ],
-    "Kugel": [
-      { label: "Kugel (nur für Mage)", item_type: "orb" }
-    ],
-    "Köcher": [
-      { label: "Köcher (nur für Ranger)", item_type: "quiver" }
-    ],
-    "Buch": [
-      { label: "Buch (nur für Necromancer)", item_type: "book" }
+  "Offhand": {
+    "Schilde & Fokus": [
+      { label: "Schild", item_type: "shield" },
+      { label: "Kreuzritterschild", item_type: "crusader_shield" },
+      { label: "Kugel", item_type: "orb" },
+      { label: "Köcher", item_type: "quiver" },
+      { label: "Buch", item_type: "book" }
     ]
   },
-  "Backpack": {
-    "Rückenslot": [
-      { label: "Rückenslot", item_type: "backpack" }
-    ]
-  },
-  "Artifact": {
-    "Artefakt": [
-      { label: "Artefakt", item_type: "artifact" }
-    ]
-  },
-  "Begleiter-Special": {
-    "Fokus": [
-      { label: "Fokus", item_type: "companion_focus" }
-    ],
-    "Marke": [
-      { label: "Marke", item_type: "companion_mark" }
-    ],
-    "Relikt": [
-      { label: "Relikt", item_type: "companion_relic" }
+  "Spezial": {
+    "Sonstige": [
+      { label: "Backpack", item_type: "backpack" },
+      { label: "Artefakt", item_type: "artifact" },
+      { label: "Companion Focus", item_type: "companion_focus" },
+      { label: "Companion Mark", item_type: "companion_mark" },
+      { label: "Companion Relic", item_type: "companion_relic" }
     ]
   }
 };
-
-const CANONICAL_AFFIX_CODES = new Set([
-  "mainstat_strength_primary",
-  "mainstat_dexterity_primary",
-  "mainstat_intelligence_primary",
-  "vitality_primary",
-
-  "flat_damage_primary",
-  "damage_percent_primary",
-  "attack_speed_primary",
-  "crit_chance_primary",
-  "crit_damage_primary",
-  "cooldown_reduction_primary",
-  "resource_cost_reduction_primary",
-  "resource_regen_primary",
-  "area_damage_primary",
-  "elite_damage_primary",
-  "life_on_hit_primary",
-  "life_percent_primary",
-  "life_per_second_primary",
-  "armor_primary",
-  "all_resistance_primary",
-  "movement_speed_primary",
-  "block_chance_primary",
-
-  "socket_1_primary",
-  "socket_2_primary",
-  "socket_3_primary",
-
-  "pickup_radius_1_2",
-  "healing_globe_bonus",
-  "resist_single_121_140",
-  "resist_single_141_160",
-  "resource_on_rage_spend",
-  "life_after_kill_secondary",
-  "max_resource_secondary",
-  "ranged_damage_reduction_secondary",
-  "melee_damage_reduction_secondary",
-  "reduced_level_requirement_secondary",
-  "bleed_secondary",
-  "physical_resist_secondary",
-  "lightning_resist_secondary",
-  "fire_resist_secondary",
-  "cold_resist_secondary",
-  "arcane_resist_secondary",
-  "poison_resist_secondary",
-  "ignore_durability_loss_secondary",
-  "experience_per_kill_secondary",
-  "gold_find_secondary",
-  "thorns_secondary",
-  "cc_duration_reduction_secondary",
-  "globe_potion_bonus_secondary",
-  "on_hit_knockback_secondary",
-  "on_hit_freeze_secondary",
-  "on_hit_blind_secondary",
-  "on_hit_chill_secondary",
-  "on_hit_slow_secondary",
-  "on_hit_immobilize_secondary",
-  "on_hit_stun_secondary"
-]);
 
 function $(id) {
   return document.getElementById(id);
@@ -214,6 +137,21 @@ function clearStatus() {
   box.className = "status info hidden";
 }
 
+function setValidationBox(prefix, messages = [], severity = "warn") {
+  const box = $(`${prefix}ValidationBox`);
+  if (!box) return;
+
+  if (!messages.length) {
+    box.textContent = "";
+    box.className = "warn-box validation-box hidden";
+    return;
+  }
+
+  box.textContent = messages.join("\n");
+  box.className = `${severity}-box validation-box`;
+  box.classList.remove("hidden");
+}
+
 function debounce(fn, wait = 180) {
   let t = null;
   return (...args) => {
@@ -235,6 +173,11 @@ function parseNullableNumber(value, integer = false) {
   if (value === null || value === undefined || value === "") return null;
   const num = integer ? parseInt(value, 10) : parseFloat(value);
   return Number.isNaN(num) ? null : num;
+}
+
+function toBool(value, fallback = false) {
+  if (value === null || value === undefined) return fallback;
+  return !!value;
 }
 
 function slugify(input) {
@@ -289,7 +232,7 @@ function normalizeForSearch(value) {
     .replace(/erfahrung pro kill/g, "bonus experience")
     .replace(/dornenschaden/g, "thorns")
     .replace(/sockel/g, "socket")
-    .replace(/r\u00fcstung/g, "armor")
+    .replace(/rüstung/g, "armor")
     .replace(/ruestung/g, "armor")
     .replace(/blockchance/g, "block chance")
     .replace(/staerke/g, "strength")
@@ -327,61 +270,6 @@ function levenshtein(a, b) {
   }
 
   return matrix[a.length][b.length];
-}
-
-function isCanonicalAffix(def) {
-  if (!def) return false;
-  return CANONICAL_AFFIX_CODES.has(String(def.affix_code || ""));
-}
-
-function getAffixDisplayLabel(def) {
-  if (!def) return "";
-
-  const code = String(def.affix_code || "");
-  if (code === "socket_1_primary") return "(1) Sockel";
-  if (code === "socket_2_primary") return "(2) Sockel";
-  if (code === "socket_3_primary") return "(3) Sockel";
-
-  return String(def.description_template || def.affix_code || "").trim();
-}
-
-function fuzzyScoreAffix(def, query) {
-  const q = normalizeForSearch(query);
-  if (!q) return 0;
-
-  const code = normalizeForSearch(def.affix_code || "");
-  const stat = normalizeForSearch(def.stat_name || "");
-  const desc = normalizeForSearch(def.description_template || "");
-  const category = normalizeForSearch(def.affix_category || "");
-
-  let score = 0;
-
-  if (desc === q) score += 2000;
-  if (stat === q) score += 1800;
-  if (code === q) score += 1500;
-
-  if (desc.includes(q)) score += 1000;
-  if (stat.includes(q)) score += 900;
-  if (code.includes(q)) score += 700;
-  if (category.includes(q)) score += 200;
-
-  const qTokens = q.split(" ").filter(Boolean);
-  for (const token of qTokens) {
-    if (desc.includes(token)) score += 180;
-    if (stat.includes(token)) score += 150;
-    if (code.includes(token)) score += 130;
-    if (category.includes(token)) score += 30;
-  }
-
-  const descDistance = levenshtein(q, desc);
-  const statDistance = levenshtein(q, stat);
-  const codeDistance = levenshtein(q, code);
-
-  score += Math.max(0, 220 - descDistance * 8);
-  score += Math.max(0, 170 - statDistance * 10);
-  score += Math.max(0, 120 - codeDistance * 8);
-
-  return score;
 }
 
 function formatPreviewNumber(value, decimals = 0) {
@@ -446,11 +334,11 @@ function buildRarityLabelFallback(rarity, itemType) {
     boots: "Stiefel",
     amulet: "Amulett",
     ring: "Ring",
-    backpack: "Rückenslot",
+    backpack: "Backpack",
     artifact: "Artefakt",
-    companion_focus: "Fokus",
-    companion_mark: "Marke",
-    companion_relic: "Relikt"
+    companion_focus: "Companion Focus",
+    companion_mark: "Companion Mark",
+    companion_relic: "Companion Relic"
   };
 
   const label = typeMap[itemType] || itemType || "Gegenstand";
@@ -467,19 +355,188 @@ function inferTooltipArchetype(itemType, equipSlot, family) {
   return "";
 }
 
+function inferCanHaveDurability(baseItem) {
+  if (!baseItem?.item_type) return false;
+  return ["weapon", "armor", "offhand"].includes(baseItem.tooltip_archetype);
+}
+
+function inferCanHaveGems(baseItem) {
+  if (!baseItem?.item_type) return false;
+  const nonGemTypes = new Set(["amulet", "ring", "artifact", "backpack", "companion_focus", "companion_mark", "companion_relic"]);
+  return !nonGemTypes.has(baseItem.item_type);
+}
+
 function isAllowedUser() {
   return state.user?.id === ALLOWED_PROFILE_ID || state.profile?.id === ALLOWED_PROFILE_ID;
 }
 
+function getAllowedAffixIdsForItemType(itemType) {
+  return state.affixAllowedByType.get(itemType) || new Set();
+}
+
+function getAllKnownItemTypes() {
+  const allKnownItemTypes = new Set();
+
+  Object.values(FALLBACK_ITEM_STRUCTURE).forEach(subMap => {
+    Object.values(subMap).forEach(entries => {
+      entries.forEach(entry => {
+        if (entry?.item_type) allKnownItemTypes.add(entry.item_type);
+      });
+    });
+  });
+
+  state.equipSlotItemTypes.forEach(row => {
+    if (row?.item_type) allKnownItemTypes.add(row.item_type);
+  });
+
+  state.items.forEach(item => {
+    if (item?.item_type) allKnownItemTypes.add(item.item_type);
+  });
+
+  state.itemTypeDefinitions.forEach((_, key) => {
+    allKnownItemTypes.add(key);
+  });
+
+  return Array.from(allKnownItemTypes);
+}
+
+function getItemTypeMeta(itemType) {
+  return state.itemTypeDefinitions.get(itemType) || null;
+}
+
+function getDynamicStructure() {
+  const structure = {};
+
+  for (const itemType of getAllKnownItemTypes()) {
+    const meta = getItemTypeMeta(itemType);
+    const family = meta?.family || inferFamilyFromItemType(itemType);
+    const subfamily = meta?.subfamily || inferSubfamilyFromItemType(itemType);
+    const label = meta?.label || buildHumanItemTypeLabel(itemType);
+
+    if (!structure[family]) structure[family] = {};
+    if (!structure[family][subfamily]) structure[family][subfamily] = [];
+
+    structure[family][subfamily].push({ label, item_type: itemType });
+  }
+
+  Object.values(structure).forEach(subMap => {
+    Object.values(subMap).forEach(entries => {
+      entries.sort((a, b) => a.label.localeCompare(b.label, "de"));
+    });
+  });
+
+  return structure;
+}
+
+function getEffectiveItemStructure() {
+  const dynamic = getDynamicStructure();
+  if (Object.keys(dynamic).length) return dynamic;
+  return FALLBACK_ITEM_STRUCTURE;
+}
+
+function buildHumanItemTypeLabel(itemType) {
+  return String(itemType || "")
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (m) => m.toUpperCase());
+}
+
+function inferFamilyFromItemType(itemType) {
+  if (!itemType) return "Sonstige";
+
+  const weaponTypes = new Set([
+    "axe_1h", "dagger", "mace_1h", "spear", "sword_1h", "ceremonial_knife",
+    "fist_weapon", "flail_1h", "mighty_weapon_1h", "scythe_1h",
+    "mace_2h", "polearm", "staff", "sword_2h", "flail_2h",
+    "mighty_weapon_2h", "scythe_2h", "bow", "crossbow", "hand_crossbow", "wand"
+  ]);
+
+  const armorTypes = new Set([
+    "helmet", "soulstone", "mask", "hat", "shoulder_armor",
+    "chest_armor", "cloak", "bracer", "gloves", "belt",
+    "mighty_belt", "pants", "boots"
+  ]);
+
+  const jewelryTypes = new Set(["amulet", "ring"]);
+  const offhandTypes = new Set(["shield", "crusader_shield", "orb", "quiver", "book"]);
+
+  if (weaponTypes.has(itemType)) return "Waffen";
+  if (armorTypes.has(itemType)) return "Rüstung";
+  if (jewelryTypes.has(itemType)) return "Schmuck";
+  if (offhandTypes.has(itemType)) return "Offhand";
+  return "Spezial";
+}
+
+function inferSubfamilyFromItemType(itemType) {
+  if (!itemType) return "Sonstige";
+
+  const map = {
+    axe_1h: "Einhand",
+    dagger: "Einhand",
+    mace_1h: "Einhand",
+    spear: "Einhand",
+    sword_1h: "Einhand",
+    ceremonial_knife: "Einhand",
+    fist_weapon: "Einhand",
+    flail_1h: "Einhand",
+    mighty_weapon_1h: "Einhand",
+    scythe_1h: "Einhand",
+    wand: "Einhand",
+
+    mace_2h: "Zweihand",
+    polearm: "Zweihand",
+    staff: "Zweihand",
+    sword_2h: "Zweihand",
+    flail_2h: "Zweihand",
+    mighty_weapon_2h: "Zweihand",
+    scythe_2h: "Zweihand",
+
+    bow: "Distanzwaffen",
+    crossbow: "Distanzwaffen",
+    hand_crossbow: "Distanzwaffen",
+
+    helmet: "Kopf",
+    soulstone: "Kopf",
+    mask: "Kopf",
+    hat: "Kopf",
+
+    shoulder_armor: "Schultern",
+    chest_armor: "Brust",
+    cloak: "Brust",
+    bracer: "Arme",
+    gloves: "Hände",
+    belt: "Gürtel",
+    mighty_belt: "Gürtel",
+    pants: "Beine",
+    boots: "Füße",
+
+    amulet: "Amulett",
+    ring: "Ring",
+
+    shield: "Schilde & Fokus",
+    crusader_shield: "Schilde & Fokus",
+    orb: "Schilde & Fokus",
+    quiver: "Schilde & Fokus",
+    book: "Schilde & Fokus"
+  };
+
+  return map[itemType] || "Sonstige";
+}
+
 function getFamilyOfItemType(itemType) {
-  for (const [family, subMap] of Object.entries(ITEM_STRUCTURE)) {
+  const structure = getEffectiveItemStructure();
+
+  for (const [family, subMap] of Object.entries(structure)) {
     for (const [subfamily, entries] of Object.entries(subMap)) {
       if (entries.some(e => e.item_type === itemType)) {
         return { family, subfamily };
       }
     }
   }
-  return { family: "", subfamily: "" };
+
+  return {
+    family: inferFamilyFromItemType(itemType),
+    subfamily: inferSubfamilyFromItemType(itemType)
+  };
 }
 
 async function generateUniqueItemCode(displayName, itemType, existingItemId = null) {
@@ -528,34 +585,62 @@ async function getSessionAndProfile() {
   state.profile = profile || null;
 }
 
+function fuzzyScoreAffix(def, query) {
+  const q = normalizeForSearch(query);
+  if (!q) return 0;
+
+  const code = normalizeForSearch(def.affix_code || "");
+  const stat = normalizeForSearch(def.stat_name || "");
+  const desc = normalizeForSearch(def.description_template || "");
+  const category = normalizeForSearch(def.affix_category || "");
+
+  let score = 0;
+
+  if (desc === q) score += 2000;
+  if (stat === q) score += 1800;
+  if (code === q) score += 1500;
+
+  if (desc.includes(q)) score += 1000;
+  if (stat.includes(q)) score += 900;
+  if (code.includes(q)) score += 700;
+  if (category.includes(q)) score += 200;
+
+  const qTokens = q.split(" ").filter(Boolean);
+  for (const token of qTokens) {
+    if (desc.includes(token)) score += 180;
+    if (stat.includes(token)) score += 150;
+    if (code.includes(token)) score += 130;
+    if (category.includes(token)) score += 30;
+  }
+
+  const descDistance = levenshtein(q, desc);
+  const statDistance = levenshtein(q, stat);
+  const codeDistance = levenshtein(q, code);
+
+  score += Math.max(0, 220 - descDistance * 8);
+  score += Math.max(0, 170 - statDistance * 10);
+  score += Math.max(0, 120 - codeDistance * 8);
+
+  return score;
+}
+
+function getAffixDisplayLabel(def) {
+  if (!def) return "";
+
+  const code = String(def.affix_code || "");
+  if (code === "socket_1_primary") return "(1) Sockel";
+  if (code === "socket_2_primary") return "(2) Sockel";
+  if (code === "socket_3_primary") return "(3) Sockel";
+
+  return String(def.description_template || def.affix_code || "").trim();
+}
+
 function pushAffixSearchEntry(itemType, entry) {
   if (!itemType) return;
   if (!state.affixSearchPoolByType.has(itemType)) {
     state.affixSearchPoolByType.set(itemType, []);
   }
   state.affixSearchPoolByType.get(itemType).push(entry);
-}
-
-function getAllKnownItemTypes() {
-  const allKnownItemTypes = new Set();
-
-  Object.values(ITEM_STRUCTURE).forEach(subMap => {
-    Object.values(subMap).forEach(entries => {
-      entries.forEach(entry => {
-        if (entry?.item_type) allKnownItemTypes.add(entry.item_type);
-      });
-    });
-  });
-
-  state.equipSlotItemTypes.forEach(row => {
-    if (row?.item_type) allKnownItemTypes.add(row.item_type);
-  });
-
-  state.items.forEach(item => {
-    if (item?.item_type) allKnownItemTypes.add(item.item_type);
-  });
-
-  return Array.from(allKnownItemTypes);
 }
 
 function buildAffixSearchPools() {
@@ -567,9 +652,8 @@ function buildAffixSearchPools() {
     const allowedSet = state.affixAllowedByType.get(itemType) || new Set();
 
     state.affixDefinitions.forEach(def => {
-      if (!isCanonicalAffix(def)) return;
       const defId = idKey(def.id);
-      if (!allowedSet.has(defId)) return;
+      if (allowedSet.size && !allowedSet.has(defId)) return;
 
       pushAffixSearchEntry(itemType, {
         source: "affix_definitions",
@@ -586,7 +670,9 @@ function buildAffixSearchPools() {
         sort_order: def.sort_order || 9999,
         rolls_socket_count: !!def.rolls_socket_count,
         socket_count_min: def.socket_count_min,
-        socket_count_max: def.socket_count_max
+        socket_count_max: def.socket_count_max,
+        exclusive_group: def.exclusive_group || null,
+        prefers_class_main_stat: !!def.prefers_class_main_stat
       });
     });
   });
@@ -615,46 +701,74 @@ function buildAffixSearchPools() {
 
     state.affixSearchPoolByType.set(itemType, Array.from(dedupe.values()));
   }
+}
 
-  console.log("AffixDefinitions count:", state.affixDefinitions.length);
-  console.log("Allowed item types:", [...state.affixAllowedByType.keys()].length);
-  console.log("Allowed sword_1h IDs:", state.affixAllowedByType.get("sword_1h"));
-  console.log("First affix def IDs:", state.affixDefinitions.slice(0, 5).map(x => ({
-    raw: x.id,
-    key: idKey(x.id),
-    code: x.affix_code
-  })));
+function buildItemTypeDefinitionsFromData() {
+  state.itemTypeDefinitions = new Map();
 
-  console.log("Affix-Pool gebaut:");
-  for (const [itemType, rows] of state.affixSearchPoolByType.entries()) {
-    const bySource = rows.reduce((acc, row) => {
-      acc[row.source] = (acc[row.source] || 0) + 1;
-      return acc;
-    }, {});
-    console.log(itemType, rows.length, bySource);
+  const structure = FALLBACK_ITEM_STRUCTURE;
+  for (const [family, subMap] of Object.entries(structure)) {
+    for (const [subfamily, entries] of Object.entries(subMap)) {
+      entries.forEach(entry => {
+        state.itemTypeDefinitions.set(entry.item_type, {
+          item_type: entry.item_type,
+          family,
+          subfamily,
+          label: entry.label
+        });
+      });
+    }
   }
+
+  state.items.forEach(item => {
+    if (!item?.item_type) return;
+    if (!state.itemTypeDefinitions.has(item.item_type)) {
+      state.itemTypeDefinitions.set(item.item_type, {
+        item_type: item.item_type,
+        family: inferFamilyFromItemType(item.item_type),
+        subfamily: inferSubfamilyFromItemType(item.item_type),
+        label: buildHumanItemTypeLabel(item.item_type)
+      });
+    }
+  });
+
+  state.equipSlotItemTypes.forEach(row => {
+    if (!row?.item_type) return;
+    if (!state.itemTypeDefinitions.has(row.item_type)) {
+      state.itemTypeDefinitions.set(row.item_type, {
+        item_type: row.item_type,
+        family: inferFamilyFromItemType(row.item_type),
+        subfamily: inferSubfamilyFromItemType(row.item_type),
+        label: buildHumanItemTypeLabel(row.item_type)
+      });
+    }
+  });
 }
 
 async function loadReferenceData() {
   const [
     equipSlotItemTypesRes,
+    equipSlotsRes,
     affixesRes,
     rarityRulesRes,
     allowedRowsRes
   ] = await Promise.all([
     supabaseClient.from("equip_slot_item_types").select("*").eq("is_enabled", true).order("sort_order"),
+    supabaseClient.from("equip_slots").select("*").eq("is_enabled", true).order("sort_order"),
     supabaseClient.from("affix_definitions").select("*").eq("is_enabled", true).order("sort_order"),
     supabaseClient.from("item_rarity_rules").select("*"),
     supabaseClient.from("affix_definition_item_types").select("affix_definition_id,item_type")
   ]);
 
   if (equipSlotItemTypesRes.error) throw equipSlotItemTypesRes.error;
+  if (equipSlotsRes.error) throw equipSlotsRes.error;
   if (affixesRes.error) throw affixesRes.error;
   if (rarityRulesRes.error) throw rarityRulesRes.error;
   if (allowedRowsRes.error) throw allowedRowsRes.error;
 
   state.equipSlotItemTypes = equipSlotItemTypesRes.data || [];
-  state.affixDefinitions = (affixesRes.data || []).filter(isCanonicalAffix);
+  state.equipSlots = equipSlotsRes.data || [];
+  state.affixDefinitions = affixesRes.data || [];
   state.itemRarityRules = rarityRulesRes.data || [];
 
   state.itemTypeToSlot = new Map();
@@ -664,17 +778,21 @@ async function loadReferenceData() {
 
   state.rarityRuleMap = new Map();
   state.itemRarityRules.forEach(rule => {
-    state.rarityRuleMap.set(rule.rarity, rule);
-  });
+    const rarityKey =
+      rule.rarity ||
+      rule.rarity_code ||
+      rule.item_rarity ||
+      rule.code;
 
-  const canonicalAffixIdSet = new Set(state.affixDefinitions.map(x => idKey(x.id)));
+    if (rarityKey) {
+      state.rarityRuleMap.set(rarityKey, rule);
+    }
+  });
 
   state.affixAllowedByType = new Map();
   (allowedRowsRes.data || []).forEach(row => {
     const itemType = row.item_type;
     const affixId = idKey(row.affix_definition_id);
-
-    if (!canonicalAffixIdSet.has(affixId)) return;
 
     if (!state.affixAllowedByType.has(itemType)) {
       state.affixAllowedByType.set(itemType, new Set());
@@ -682,6 +800,7 @@ async function loadReferenceData() {
     state.affixAllowedByType.get(itemType).add(affixId);
   });
 
+  buildItemTypeDefinitionsFromData();
   buildAffixSearchPools();
   populateListTypeFilter();
   populateFamilySelectors("create");
@@ -701,9 +820,10 @@ function populateListTypeFilter() {
     select.innerHTML = `<option value="">alle</option>`;
 
     types.forEach(type => {
+      const meta = getItemTypeMeta(type);
       const opt = document.createElement("option");
       opt.value = type;
-      opt.textContent = type;
+      opt.textContent = meta?.label ? `${meta.label} [${type}]` : type;
       select.appendChild(opt);
     });
 
@@ -719,8 +839,10 @@ function populateFamilySelectors(prefix) {
   const typeSelect = $(`${prefix}_item_type`);
   if (!familySelect || !subfamilySelect || !typeSelect) return;
 
+  const structure = getEffectiveItemStructure();
+
   familySelect.innerHTML = "";
-  Object.keys(ITEM_STRUCTURE).forEach(family => {
+  Object.keys(structure).sort((a, b) => a.localeCompare(b, "de")).forEach(family => {
     const opt = document.createElement("option");
     opt.value = family;
     opt.textContent = family;
@@ -730,7 +852,7 @@ function populateFamilySelectors(prefix) {
   function fillSubfamilies() {
     const family = familySelect.value;
     subfamilySelect.innerHTML = "";
-    Object.keys(ITEM_STRUCTURE[family] || {}).forEach(sub => {
+    Object.keys(structure[family] || {}).sort((a, b) => a.localeCompare(b, "de")).forEach(sub => {
       const opt = document.createElement("option");
       opt.value = sub;
       opt.textContent = sub;
@@ -744,11 +866,11 @@ function populateFamilySelectors(prefix) {
     const sub = subfamilySelect.value;
     typeSelect.innerHTML = "";
 
-    const entries = ITEM_STRUCTURE[family]?.[sub] || [];
+    const entries = structure[family]?.[sub] || [];
     entries.forEach(entry => {
       const opt = document.createElement("option");
       opt.value = entry.item_type;
-      opt.textContent = entry.label;
+      opt.textContent = `${entry.label} [${entry.item_type}]`;
       typeSelect.appendChild(opt);
     });
 
@@ -811,10 +933,10 @@ function applyRarityDefaults(prefix) {
   const rule = getRarityRule(rarity);
   if (!rule) return;
 
-  const pMin = rule.primary_min ?? rule.random_primary_min ?? rule.min_primary_affixes ?? rule.primary_affixes_min ?? 0;
-  const pMax = rule.primary_max ?? rule.random_primary_max ?? rule.max_primary_affixes ?? rule.primary_affixes_max ?? 0;
-  const sMin = rule.secondary_min ?? rule.random_secondary_min ?? rule.min_secondary_affixes ?? rule.secondary_affixes_min ?? 0;
-  const sMax = rule.secondary_max ?? rule.random_secondary_max ?? rule.max_secondary_affixes ?? rule.secondary_affixes_max ?? 0;
+  const pMin = rule.primary_min ?? rule.random_primary_min ?? rule.min_primary_affixes ?? rule.primary_affixes_min ?? rule.primary_affix_min ?? 0;
+  const pMax = rule.primary_max ?? rule.random_primary_max ?? rule.max_primary_affixes ?? rule.primary_affixes_max ?? rule.primary_affix_max ?? 0;
+  const sMin = rule.secondary_min ?? rule.random_secondary_min ?? rule.min_secondary_affixes ?? rule.secondary_affixes_min ?? rule.secondary_affix_min ?? 0;
+  const sMax = rule.secondary_max ?? rule.random_secondary_max ?? rule.max_secondary_affixes ?? rule.secondary_affixes_max ?? rule.secondary_affix_max ?? 0;
 
   if ($(`${prefix}_random_primary_min`)) $(`${prefix}_random_primary_min`).value = pMin;
   if ($(`${prefix}_random_primary_max`)) $(`${prefix}_random_primary_max`).value = pMax;
@@ -856,7 +978,7 @@ function createAffixModuleHtml(prefix, moduleId, data = null) {
         </div>
         <div class="field col-3">
           <label>Suche Affix</label>
-          <input class="affix-search" type="text" placeholder="z.B. Krit, Intilligenz, Leben ..." />
+          <input class="affix-search" type="text" placeholder="z.B. Krit, Intelligenz, Leben ..." />
         </div>
         <div class="field col-2">
           <label>&nbsp;</label>
@@ -962,7 +1084,7 @@ function createChoiceOptionHtml(data = null) {
       <div class="row">
         <div class="field col-4">
           <label>Suche Affix</label>
-          <input class="choice-option-search" type="text" placeholder="z.B. Krit, Intilligenz ..." />
+          <input class="choice-option-search" type="text" placeholder="z.B. Krit, Intelligenz ..." />
         </div>
         <div class="field col-8">
           <label>Top Treffer</label>
@@ -1103,7 +1225,7 @@ function refreshSingleAffixModule(mod, itemType) {
     const previous = fixedSelect.dataset.value || fixedSelect.value || "";
     fixedSelect.innerHTML = `<option value="">- bitte wählen -</option>`;
 
-    ranked.slice(0, 200).forEach(def => {
+    ranked.slice(0, 250).forEach(def => {
       const opt = document.createElement("option");
       opt.value = `${def.source}:${idKey(def.source_id)}:${def.affix_category}:${def.affix_code}`;
       opt.textContent = `${def.affix_code} | ${getAffixDisplayLabel(def)}`;
@@ -1150,7 +1272,7 @@ function refreshSingleAffixModule(mod, itemType) {
     const previous = select.dataset.value || select.value || "";
     select.innerHTML = `<option value="">- bitte wählen -</option>`;
 
-    optionRanked.slice(0, 200).forEach(def => {
+    optionRanked.slice(0, 250).forEach(def => {
       const opt = document.createElement("option");
       opt.value = `${def.source}:${idKey(def.source_id)}:${def.affix_category}:${def.affix_code}`;
       opt.textContent = `${def.affix_code} | ${getAffixDisplayLabel(def)}`;
@@ -1312,6 +1434,33 @@ function bindAffixModuleEvents(container, prefix) {
   refreshAffixModuleSelects(container, getSelectedItemType(prefix));
 }
 
+function syncDerivedFlagDefaults(prefix) {
+  const baseItem = prefix === "create" ? collectBaseItemFromCreateForm(true) : collectBaseItemFromEditForm(true);
+  const canDurabilityEl = $(`${prefix}_can_have_durability`);
+  const canGemsEl = $(`${prefix}_can_have_gems`);
+  const isEquippableEl = $(`${prefix}_is_equippable`);
+
+  if (isEquippableEl && !baseItem.item_type) {
+    isEquippableEl.checked = false;
+  } else if (isEquippableEl && baseItem.item_type) {
+    isEquippableEl.checked = true;
+  }
+
+  if (canDurabilityEl && !canDurabilityEl.dataset.touched) {
+    canDurabilityEl.checked = inferCanHaveDurability(baseItem);
+  }
+
+  if (canGemsEl && !canGemsEl.dataset.touched) {
+    canGemsEl.checked = inferCanHaveGems(baseItem);
+  }
+
+  if (baseItem.item_type && ["amulet", "ring", "artifact", "backpack", "companion_focus", "companion_mark", "companion_relic"].includes(baseItem.item_type)) {
+    if (canGemsEl && !canGemsEl.dataset.touched) canGemsEl.checked = false;
+    if ($(`${prefix}_min_sockets`) && !$(`${prefix}_min_sockets`).dataset.touched) $(`${prefix}_min_sockets`).value = 0;
+    if ($(`${prefix}_max_sockets`) && !$(`${prefix}_max_sockets`).dataset.touched) $(`${prefix}_max_sockets`).value = 0;
+  }
+}
+
 function refreshCreateDerivedFields() {
   const itemType = getSelectedItemType("create");
   const equipSlot = state.itemTypeToSlot.get(itemType) || "";
@@ -1319,9 +1468,10 @@ function refreshCreateDerivedFields() {
 
   const family = getSelectedFamily("create");
   if ($("createWeaponBlock")) $("createWeaponBlock").classList.toggle("hidden", family !== "Waffen");
-  if ($("createArmorBlock")) $("createArmorBlock").classList.toggle("hidden", family !== "Rüstung");
+  if ($("createArmorBlock")) $("createArmorBlock").classList.toggle("hidden", !(family === "Rüstung" || equipSlot === "weapon_off"));
 
   refreshAffixModuleSelects($("createAffixModuleList"), itemType);
+  syncDerivedFlagDefaults("create");
   refreshCreateItemCode();
   updateCreatePreview();
 }
@@ -1333,9 +1483,10 @@ function refreshEditDerivedFields() {
 
   const family = getSelectedFamily("edit");
   if ($("editWeaponBlock")) $("editWeaponBlock").classList.toggle("hidden", family !== "Waffen");
-  if ($("editArmorBlock")) $("editArmorBlock").classList.toggle("hidden", family !== "Rüstung");
+  if ($("editArmorBlock")) $("editArmorBlock").classList.toggle("hidden", !(family === "Rüstung" || equipSlot === "weapon_off"));
 
   refreshAffixModuleSelects($("editAffixModuleList"), itemType);
+  syncDerivedFlagDefaults("edit");
   updateEditPreview();
 }
 
@@ -1643,10 +1794,11 @@ function renderTooltipPreview(targetId, previewData) {
     </div>`;
 }
 
-function collectBaseItemFromCreateForm() {
+function collectBaseItemFromCreateForm(skipFlagSync = false) {
   const itemType = getSelectedItemType("create");
   const family = getSelectedFamily("create");
   const equipSlot = $("create_equip_slot")?.value || "";
+  const inferredArchetype = inferTooltipArchetype(itemType, equipSlot, family);
 
   return {
     item_code: $("create_item_code_preview")?.value?.trim() || "",
@@ -1673,14 +1825,30 @@ function collectBaseItemFromCreateForm() {
     source_type: $("create_is_crafted")?.checked ? "crafted" : "drop",
     crafted_by: $("create_is_crafted")?.checked ? ($("create_crafted_by")?.value || null) : null,
     crafted_tier: $("create_is_crafted")?.checked ? parseNullableNumber($("create_crafted_tier")?.value, true) : null,
-    tooltip_archetype: inferTooltipArchetype(itemType, equipSlot, family)
+    tooltip_archetype: inferredArchetype,
+
+    is_equippable: !!$("create_is_equippable")?.checked,
+    is_stackable: !!$("create_is_stackable")?.checked,
+    can_have_gems: !!$("create_can_have_gems")?.checked,
+    can_have_durability: !!$("create_can_have_durability")?.checked,
+    can_roll_primary_affixes: !!$("create_can_roll_primary_affixes")?.checked,
+    can_roll_secondary_affixes: !!$("create_can_roll_secondary_affixes")?.checked,
+    inventory_width: parseNullableNumber($("create_inventory_width")?.value, true) || 1,
+    inventory_height: parseNullableNumber($("create_inventory_height")?.value, true) || 1,
+    max_stack: parseNullableNumber($("create_max_stack")?.value, true) || 1,
+    min_sockets: parseNullableNumber($("create_min_sockets")?.value, true) || 0,
+    max_sockets: parseNullableNumber($("create_max_sockets")?.value, true) || 0,
+    item_set_code: $("create_item_set_code")?.value?.trim() || null,
+    description: $("create_description")?.value?.trim() || "",
+    flavor_text: $("create_flavor_text")?.value?.trim() || ""
   };
 }
 
-function collectBaseItemFromEditForm() {
+function collectBaseItemFromEditForm(skipFlagSync = false) {
   const itemType = getSelectedItemType("edit");
   const family = getSelectedFamily("edit");
   const equipSlot = $("edit_equip_slot")?.value || "";
+  const inferredArchetype = inferTooltipArchetype(itemType, equipSlot, family);
 
   return {
     item_code: $("edit_item_code")?.value?.trim() || "",
@@ -1707,7 +1875,22 @@ function collectBaseItemFromEditForm() {
     source_type: $("edit_is_crafted")?.checked ? "crafted" : "drop",
     crafted_by: $("edit_is_crafted")?.checked ? ($("edit_crafted_by")?.value || null) : null,
     crafted_tier: $("edit_is_crafted")?.checked ? parseNullableNumber($("edit_crafted_tier")?.value, true) : null,
-    tooltip_archetype: inferTooltipArchetype(itemType, equipSlot, family)
+    tooltip_archetype: inferredArchetype,
+
+    is_equippable: !!$("edit_is_equippable")?.checked,
+    is_stackable: !!$("edit_is_stackable")?.checked,
+    can_have_gems: !!$("edit_can_have_gems")?.checked,
+    can_have_durability: !!$("edit_can_have_durability")?.checked,
+    can_roll_primary_affixes: !!$("edit_can_roll_primary_affixes")?.checked,
+    can_roll_secondary_affixes: !!$("edit_can_roll_secondary_affixes")?.checked,
+    inventory_width: parseNullableNumber($("edit_inventory_width")?.value, true) || 1,
+    inventory_height: parseNullableNumber($("edit_inventory_height")?.value, true) || 1,
+    max_stack: parseNullableNumber($("edit_max_stack")?.value, true) || 1,
+    min_sockets: parseNullableNumber($("edit_min_sockets")?.value, true) || 0,
+    max_sockets: parseNullableNumber($("edit_max_sockets")?.value, true) || 0,
+    item_set_code: $("edit_item_set_code")?.value?.trim() || null,
+    description: $("edit_description")?.value?.trim() || "",
+    flavor_text: $("edit_flavor_text")?.value?.trim() || ""
   };
 }
 
@@ -1720,14 +1903,121 @@ function collectPowerData(prefix) {
   };
 }
 
+function validateBaseItem(baseItem, modules, powerData) {
+  const messages = [];
+
+  if (!baseItem.item_type) messages.push("• Bitte ein genaues Item auswählen.");
+  if (!baseItem.display_name) messages.push("• Bitte einen Anzeigenamen eingeben.");
+  if (!baseItem.item_code) messages.push("• item_code fehlt.");
+  if (!baseItem.equip_slot && baseItem.is_equippable) messages.push("• Für dieses item_type konnte kein equip_slot bestimmt werden.");
+  if (baseItem.level_requirement < 1) messages.push("• Level Requirement muss mindestens 1 sein.");
+
+  if (baseItem.inventory_width < 1 || baseItem.inventory_height < 1) {
+    messages.push("• Inventory Width und Height müssen mindestens 1 sein.");
+  }
+
+  if (baseItem.is_stackable && baseItem.max_stack < 2) {
+    messages.push("• Stapelbare Items sollten max_stack >= 2 haben.");
+  }
+
+  if (!baseItem.is_stackable && baseItem.max_stack !== 1) {
+    messages.push("• Nicht stapelbare Items sollten max_stack = 1 haben.");
+  }
+
+  if (baseItem.min_sockets < 0 || baseItem.max_sockets < 0) {
+    messages.push("• Min/Max Sockets dürfen nicht negativ sein.");
+  }
+
+  if (baseItem.min_sockets > baseItem.max_sockets) {
+    messages.push("• Min Sockets darf nicht größer als Max Sockets sein.");
+  }
+
+  if (!baseItem.can_have_gems && (baseItem.min_sockets > 0 || baseItem.max_sockets > 0)) {
+    messages.push("• Wenn 'Kann Sockel / Gems haben' deaktiviert ist, müssen Min/Max Sockets = 0 sein.");
+  }
+
+  if (baseItem.tooltip_archetype === "weapon") {
+    if (baseItem.damage_min === null || baseItem.damage_max === null || baseItem.attacks_per_second === null) {
+      messages.push("• Waffen brauchen Schaden Min, Schaden Max und Angriffe pro Sekunde.");
+    }
+    if (baseItem.damage_min !== null && baseItem.damage_max !== null && baseItem.damage_min > baseItem.damage_max) {
+      messages.push("• Schaden Min darf nicht größer als Schaden Max sein.");
+    }
+  }
+
+  if (baseItem.tooltip_archetype === "armor") {
+    if (baseItem.armor_min === null && baseItem.armor_max === null) {
+      messages.push("• Rüstungsteile sollten armor_min/armor_max besitzen.");
+    }
+    if (baseItem.armor_min !== null && baseItem.armor_max !== null && baseItem.armor_min > baseItem.armor_max) {
+      messages.push("• armor_min darf nicht größer als armor_max sein.");
+    }
+  }
+
+  const rarityRule = getRarityRule(baseItem.rarity);
+  if (rarityRule) {
+    const pMin = rarityRule.primary_min ?? rarityRule.random_primary_min ?? rarityRule.min_primary_affixes ?? rarityRule.primary_affixes_min ?? rarityRule.primary_affix_min ?? 0;
+    const pMax = rarityRule.primary_max ?? rarityRule.random_primary_max ?? rarityRule.max_primary_affixes ?? rarityRule.primary_affixes_max ?? rarityRule.primary_affix_max ?? 0;
+    const sMin = rarityRule.secondary_min ?? rarityRule.random_secondary_min ?? rarityRule.min_secondary_affixes ?? rarityRule.secondary_affixes_min ?? rarityRule.secondary_affix_min ?? 0;
+    const sMax = rarityRule.secondary_max ?? rarityRule.random_secondary_max ?? rarityRule.max_secondary_affixes ?? rarityRule.secondary_affixes_max ?? rarityRule.secondary_affix_max ?? 0;
+
+    if (baseItem.random_primary_min < 0 || baseItem.random_primary_max < 0 || baseItem.random_secondary_min < 0 || baseItem.random_secondary_max < 0) {
+      messages.push("• Random-Affix-Werte dürfen nicht negativ sein.");
+    }
+
+    if (baseItem.random_primary_min > baseItem.random_primary_max) {
+      messages.push("• Random Primary Min darf nicht größer als Max sein.");
+    }
+
+    if (baseItem.random_secondary_min > baseItem.random_secondary_max) {
+      messages.push("• Random Secondary Min darf nicht größer als Max sein.");
+    }
+
+    if (baseItem.random_primary_min < pMin || baseItem.random_primary_max > pMax) {
+      messages.push(`• Random Primary liegt außerhalb der bekannten Rarity-Rule (${pMin}-${pMax}).`);
+    }
+
+    if (baseItem.random_secondary_min < sMin || baseItem.random_secondary_max > sMax) {
+      messages.push(`• Random Secondary liegt außerhalb der bekannten Rarity-Rule (${sMin}-${sMax}).`);
+    }
+  }
+
+  const fixedStatTracker = new Map();
+  modules.forEach(mod => {
+    if (mod.kind !== "fixed") return;
+    const key = `${mod.property_category}|${mod.affix_definition?.stat_name || ""}|${mod.affix_definition?.mod_type || ""}`;
+    fixedStatTracker.set(key, (fixedStatTracker.get(key) || 0) + 1);
+  });
+
+  for (const [key, count] of fixedStatTracker.entries()) {
+    if (count > 1) {
+      messages.push(`• Doppelte feste Property erkannt: ${key}`);
+    }
+  }
+
+  if (powerData.enabled && !powerData.description) {
+    messages.push("• Macht ist aktiviert, aber die Beschreibung fehlt.");
+  }
+
+  if (baseItem.source_type === "crafted" && !baseItem.crafted_by) {
+    messages.push("• Herstellbare Items sollten 'Herstellbar bei' gesetzt haben.");
+  }
+
+  return messages;
+}
+
 function updateCreatePreview() {
   const baseItem = collectBaseItemFromCreateForm();
   if (!baseItem.display_name && !baseItem.item_type) {
     renderTooltipPreview("createPreviewContent", null);
+    setValidationBox("create", []);
     return;
   }
+
   const modules = collectAffixModules("create");
   const powerData = collectPowerData("create");
+  const messages = validateBaseItem(baseItem, modules, powerData);
+  setValidationBox("create", messages, messages.length ? "warn" : "ok");
   renderTooltipPreview("createPreviewContent", buildPreviewData(baseItem, modules, powerData));
 }
 
@@ -1735,22 +2025,48 @@ function updateEditPreview() {
   const form = $("editForm");
   if (form && form.classList.contains("hidden")) {
     renderTooltipPreview("editPreviewContent", null);
+    setValidationBox("edit", []);
     return;
   }
+
   const baseItem = collectBaseItemFromEditForm();
   const modules = collectAffixModules("edit");
   const powerData = collectPowerData("edit");
+  const messages = validateBaseItem(baseItem, modules, powerData);
+  setValidationBox("edit", messages, messages.length ? "warn" : "ok");
   renderTooltipPreview("editPreviewContent", buildPreviewData(baseItem, modules, powerData));
 }
 
 function resetCreateForm() {
   $("createForm")?.reset();
+
+  [
+    "create_can_have_durability",
+    "create_can_have_gems",
+    "create_min_sockets",
+    "create_max_sockets"
+  ].forEach(id => {
+    if ($(id)) delete $(id).dataset.touched;
+  });
+
   if ($("createAffixModuleList")) $("createAffixModuleList").innerHTML = "";
   if ($("create_has_power")) $("create_has_power").checked = false;
   if ($("createPowerBlock")) $("createPowerBlock").classList.add("hidden");
+
+  if ($("create_is_equippable")) $("create_is_equippable").checked = true;
+  if ($("create_is_stackable")) $("create_is_stackable").checked = false;
+  if ($("create_can_roll_primary_affixes")) $("create_can_roll_primary_affixes").checked = true;
+  if ($("create_can_roll_secondary_affixes")) $("create_can_roll_secondary_affixes").checked = true;
+  if ($("create_inventory_width")) $("create_inventory_width").value = 1;
+  if ($("create_inventory_height")) $("create_inventory_height").value = 1;
+  if ($("create_max_stack")) $("create_max_stack").value = 1;
+  if ($("create_min_sockets")) $("create_min_sockets").value = 0;
+  if ($("create_max_sockets")) $("create_max_sockets").value = 0;
+
   populateFamilySelectors("create");
   applyRarityDefaults("create");
   renderTooltipPreview("createPreviewContent", null);
+  setValidationBox("create", []);
 }
 
 async function persistItemToDatabase(baseItem, modules, powerData, existingItemId = null) {
@@ -1764,19 +2080,19 @@ async function persistItemToDatabase(baseItem, modules, powerData, existingItemI
     level_requirement: baseItem.level_requirement,
     appearance_code: baseItem.appearance_code || null,
     transmog_code: null,
-    min_sockets: 0,
-    max_sockets: 0,
-    is_equippable: true,
-    is_stackable: false,
-    max_stack: 1,
-    inventory_width: 1,
-    inventory_height: 1,
-    flavor_text: "",
-    description: "",
-    can_roll_primary_affixes: true,
-    can_roll_secondary_affixes: true,
-    can_have_gems: true,
-    can_have_durability: false,
+    min_sockets: baseItem.min_sockets,
+    max_sockets: baseItem.max_sockets,
+    is_equippable: baseItem.is_equippable,
+    is_stackable: baseItem.is_stackable,
+    max_stack: baseItem.max_stack,
+    inventory_width: baseItem.inventory_width,
+    inventory_height: baseItem.inventory_height,
+    flavor_text: baseItem.flavor_text,
+    description: baseItem.description,
+    can_roll_primary_affixes: baseItem.can_roll_primary_affixes,
+    can_roll_secondary_affixes: baseItem.can_roll_secondary_affixes,
+    can_have_gems: baseItem.can_have_gems,
+    can_have_durability: baseItem.can_have_durability,
     base_name: baseItem.display_name,
     rarity_label: baseItem.rarity_label || buildRarityLabelFallback(baseItem.rarity, baseItem.item_type),
     source_type: baseItem.source_type || "drop",
@@ -1791,7 +2107,7 @@ async function persistItemToDatabase(baseItem, modules, powerData, existingItemI
     random_primary_max: baseItem.random_primary_max,
     random_secondary_min: baseItem.random_secondary_min,
     random_secondary_max: baseItem.random_secondary_max,
-    item_set_code: null,
+    item_set_code: baseItem.item_set_code,
     crafted_tier: baseItem.crafted_tier,
     crafted_by: baseItem.crafted_by,
     binding_mode: baseItem.binding_mode,
@@ -1952,10 +2268,11 @@ async function createItemFromForm() {
   const baseItem = collectBaseItemFromCreateForm();
   const modules = collectAffixModules("create");
   const powerData = collectPowerData("create");
+  const validationMessages = validateBaseItem(baseItem, modules, powerData);
 
-  if (!baseItem.item_type) throw new Error("Bitte ein genaues Item auswählen.");
-  if (!baseItem.display_name) throw new Error("Bitte einen Anzeigenamen eingeben.");
-  if (!baseItem.item_code) throw new Error("item_code konnte nicht erzeugt werden.");
+  if (validationMessages.length) {
+    throw new Error(`Bitte zuerst die Validierungsprobleme beheben:\n\n${validationMessages.join("\n")}`);
+  }
 
   await persistItemToDatabase(baseItem, modules, powerData, null);
   showStatus("Item erfolgreich angelegt.", "ok");
@@ -1972,10 +2289,11 @@ async function updateCurrentItemFromForm() {
   const baseItem = collectBaseItemFromEditForm();
   const modules = collectAffixModules("edit");
   const powerData = collectPowerData("edit");
+  const validationMessages = validateBaseItem(baseItem, modules, powerData);
 
-  if (!baseItem.item_type) throw new Error("Bitte ein genaues Item auswählen.");
-  if (!baseItem.display_name) throw new Error("Bitte einen Anzeigenamen eingeben.");
-  if (!baseItem.item_code) throw new Error("Bitte item_code eingeben.");
+  if (validationMessages.length) {
+    throw new Error(`Bitte zuerst die Validierungsprobleme beheben:\n\n${validationMessages.join("\n")}`);
+  }
 
   await persistItemToDatabase(baseItem, modules, powerData, itemId);
   showStatus("Item erfolgreich aktualisiert.", "ok");
@@ -2011,6 +2329,7 @@ async function deleteCurrentItem() {
   if ($("editHint")) $("editHint").classList.remove("hidden");
   state.editCurrentItem = null;
   renderTooltipPreview("editPreviewContent", null);
+  setValidationBox("edit", []);
 
   await loadReferenceData();
   await loadItemsForList();
@@ -2022,6 +2341,7 @@ async function loadItemsForList() {
   if (error) throw error;
 
   state.items = data || [];
+  buildItemTypeDefinitionsFromData();
   populateListTypeFilter();
   renderEditItemList();
 }
@@ -2140,6 +2460,25 @@ function fillEditForm(item, fixedRows, groups, options) {
   if ($("edit_is_crafted")) $("edit_is_crafted").checked = item.source_type === "crafted";
   if ($("edit_crafted_by")) $("edit_crafted_by").value = item.crafted_by || "";
   if ($("edit_crafted_tier")) $("edit_crafted_tier").value = item.crafted_tier ?? "";
+
+  if ($("edit_is_equippable")) $("edit_is_equippable").checked = !!item.is_equippable;
+  if ($("edit_is_stackable")) $("edit_is_stackable").checked = !!item.is_stackable;
+  if ($("edit_can_have_gems")) $("edit_can_have_gems").checked = !!item.can_have_gems;
+  if ($("edit_can_have_durability")) $("edit_can_have_durability").checked = !!item.can_have_durability;
+  if ($("edit_can_roll_primary_affixes")) $("edit_can_roll_primary_affixes").checked = !!item.can_roll_primary_affixes;
+  if ($("edit_can_roll_secondary_affixes")) $("edit_can_roll_secondary_affixes").checked = !!item.can_roll_secondary_affixes;
+  if ($("edit_inventory_width")) $("edit_inventory_width").value = item.inventory_width ?? 1;
+  if ($("edit_inventory_height")) $("edit_inventory_height").value = item.inventory_height ?? 1;
+  if ($("edit_max_stack")) $("edit_max_stack").value = item.max_stack ?? 1;
+  if ($("edit_min_sockets")) $("edit_min_sockets").value = item.min_sockets ?? 0;
+  if ($("edit_max_sockets")) $("edit_max_sockets").value = item.max_sockets ?? 0;
+  if ($("edit_item_set_code")) $("edit_item_set_code").value = item.item_set_code || "";
+  if ($("edit_description")) $("edit_description").value = item.description || "";
+  if ($("edit_flavor_text")) $("edit_flavor_text").value = item.flavor_text || "";
+
+  ["edit_can_have_durability", "edit_can_have_gems", "edit_min_sockets", "edit_max_sockets"].forEach(id => {
+    if ($(id)) $(id).dataset.touched = "1";
+  });
 
   const { family, subfamily } = getFamilyOfItemType(item.item_type);
   if ($("edit_item_family")) $("edit_item_family").value = family;
@@ -2304,6 +2643,18 @@ function switchTab(tabId) {
   document.querySelector(`.tab-btn[data-tab="${tabId}"]`)?.classList.add("active");
 }
 
+function markTouched(id) {
+  const el = $(id);
+  if (!el) return;
+
+  const handler = () => {
+    el.dataset.touched = "1";
+  };
+
+  el.addEventListener("input", handler);
+  el.addEventListener("change", handler);
+}
+
 function wireCreateEvents() {
   $("create_display_name")?.addEventListener("input", async () => {
     await refreshCreateItemCode();
@@ -2333,11 +2684,27 @@ function wireCreateEvents() {
     "create_has_power",
     "create_power_description",
     "create_power_value_min",
-    "create_power_value_max"
+    "create_power_value_max",
+    "create_is_equippable",
+    "create_is_stackable",
+    "create_can_have_gems",
+    "create_can_have_durability",
+    "create_can_roll_primary_affixes",
+    "create_can_roll_secondary_affixes",
+    "create_inventory_width",
+    "create_inventory_height",
+    "create_max_stack",
+    "create_min_sockets",
+    "create_max_sockets",
+    "create_item_set_code",
+    "create_description",
+    "create_flavor_text"
   ].forEach(id => {
     $(id)?.addEventListener("input", updateCreatePreview);
     $(id)?.addEventListener("change", updateCreatePreview);
   });
+
+  ["create_can_have_durability", "create_can_have_gems", "create_min_sockets", "create_max_sockets"].forEach(markTouched);
 
   $("create_rarity")?.addEventListener("change", () => {
     applyRarityDefaults("create");
@@ -2346,6 +2713,13 @@ function wireCreateEvents() {
 
   $("create_has_power")?.addEventListener("change", () => {
     $("createPowerBlock")?.classList.toggle("hidden", !$("create_has_power")?.checked);
+    updateCreatePreview();
+  });
+
+  $("create_is_stackable")?.addEventListener("change", () => {
+    const el = $("create_max_stack");
+    if (el && !$("create_is_stackable")?.checked) el.value = 1;
+    if (el && $("create_is_stackable")?.checked && parseNullableNumber(el.value, true) < 2) el.value = 2;
     updateCreatePreview();
   });
 
@@ -2400,11 +2774,27 @@ function wireEditEvents() {
     "edit_has_power",
     "edit_power_description",
     "edit_power_value_min",
-    "edit_power_value_max"
+    "edit_power_value_max",
+    "edit_is_equippable",
+    "edit_is_stackable",
+    "edit_can_have_gems",
+    "edit_can_have_durability",
+    "edit_can_roll_primary_affixes",
+    "edit_can_roll_secondary_affixes",
+    "edit_inventory_width",
+    "edit_inventory_height",
+    "edit_max_stack",
+    "edit_min_sockets",
+    "edit_max_sockets",
+    "edit_item_set_code",
+    "edit_description",
+    "edit_flavor_text"
   ].forEach(id => {
     $(id)?.addEventListener("input", updateEditPreview);
     $(id)?.addEventListener("change", updateEditPreview);
   });
+
+  ["edit_can_have_durability", "edit_can_have_gems", "edit_min_sockets", "edit_max_sockets"].forEach(markTouched);
 
   $("edit_rarity")?.addEventListener("change", () => {
     applyRarityDefaults("edit");
@@ -2413,6 +2803,13 @@ function wireEditEvents() {
 
   $("edit_has_power")?.addEventListener("change", () => {
     $("editPowerBlock")?.classList.toggle("hidden", !$("edit_has_power")?.checked);
+    updateEditPreview();
+  });
+
+  $("edit_is_stackable")?.addEventListener("change", () => {
+    const el = $("edit_max_stack");
+    if (el && !$("edit_is_stackable")?.checked) el.value = 1;
+    if (el && $("edit_is_stackable")?.checked && parseNullableNumber(el.value, true) < 2) el.value = 2;
     updateEditPreview();
   });
 
@@ -2483,3 +2880,5 @@ async function init() {
 }
 
 init();
+
+
