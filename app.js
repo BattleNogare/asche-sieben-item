@@ -1953,11 +1953,10 @@ function buildPreviewData(baseItem, modules, powerData) {
   });
 
   if (remainingPrimary > 0) {
-    secondaryLines.push(`+ ${remainingPrimary} zufällige Primary-Eigenschaften`);
+    primaryLines.push(`+ ${remainingPrimary} zufällige Primäre Eigenschaften`);
   }
-
   if (remainingSecondary > 0) {
-    secondaryLines.push(`+ ${remainingSecondary} zufällige Secondary-Eigenschaften`);
+    secondaryLines.push(`+ ${remainingSecondary} zufällige Sekundäre Eigenschaften`);
   }
 
   if (powerData?.enabled && powerData.description) {
