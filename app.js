@@ -541,10 +541,29 @@ function getBestEquipSlotForItemType(itemType) {
     return rows[0].equip_slot || "";
   }
 
-  const direct = state.itemTypeToSlot.get(itemType);
-  if (direct) return direct;
-
   const fallbackMap = {
+    axe_1h: "weapon_main",
+    dagger: "weapon_main",
+    mace_1h: "weapon_main",
+    spear: "weapon_main",
+    sword_1h: "weapon_main",
+    ceremonial_knife: "weapon_main",
+    fist_weapon: "weapon_main",
+    flail_1h: "weapon_main",
+    mighty_weapon_1h: "weapon_main",
+    scythe_1h: "weapon_main",
+    mace_2h: "weapon_main",
+    polearm: "weapon_main",
+    staff: "weapon_main",
+    sword_2h: "weapon_main",
+    flail_2h: "weapon_main",
+    mighty_weapon_2h: "weapon_main",
+    scythe_2h: "weapon_main",
+    bow: "weapon_main",
+    crossbow: "weapon_main",
+    hand_crossbow: "weapon_main",
+    wand: "weapon_main",
+
     shield: "weapon_off",
     crusader_shield: "weapon_off",
     orb: "weapon_off",
@@ -573,29 +592,7 @@ function getBestEquipSlotForItemType(itemType) {
     artifact: "artifact",
     companion_focus: "companion_focus",
     companion_mark: "companion_mark",
-    companion_relic: "companion_relic",
-
-    axe_1h: "weapon_main",
-    dagger: "weapon_main",
-    mace_1h: "weapon_main",
-    spear: "weapon_main",
-    sword_1h: "weapon_main",
-    ceremonial_knife: "weapon_main",
-    fist_weapon: "weapon_main",
-    flail_1h: "weapon_main",
-    mighty_weapon_1h: "weapon_main",
-    scythe_1h: "weapon_main",
-    mace_2h: "weapon_main",
-    polearm: "weapon_main",
-    staff: "weapon_main",
-    sword_2h: "weapon_main",
-    flail_2h: "weapon_main",
-    mighty_weapon_2h: "weapon_main",
-    scythe_2h: "weapon_main",
-    bow: "weapon_main",
-    crossbow: "weapon_main",
-    hand_crossbow: "weapon_main",
-    wand: "weapon_main"
+    companion_relic: "companion_relic"
   };
 
   return fallbackMap[itemType] || "";
@@ -989,11 +986,61 @@ function rankAffixesForItemType(itemType, category = null, search = "", onlyAllo
 
 function getRarityRule(rarity) {
   const key = String(rarity || "").trim().toLowerCase();
-  return state.rarityRuleMap.get(key) || null;
+
+  const fallbackRules = {
+    normal: {
+      rarity: "normal",
+      primary_min: 0,
+      primary_max: 1,
+      secondary_min: 0,
+      secondary_max: 1
+    },
+    magic: {
+      rarity: "magic",
+      primary_min: 1,
+      primary_max: 2,
+      secondary_min: 0,
+      secondary_max: 1
+    },
+    rare: {
+      rarity: "rare",
+      primary_min: 2,
+      primary_max: 3,
+      secondary_min: 1,
+      secondary_max: 2
+    },
+    legendary: {
+      rarity: "legendary",
+      primary_min: 3,
+      primary_max: 4,
+      secondary_min: 2,
+      secondary_max: 2
+    },
+    unique: {
+      rarity: "unique",
+      primary_min: 4,
+      primary_max: 4,
+      secondary_min: 2,
+      secondary_max: 2
+    },
+    unreal: {
+      rarity: "unreal",
+      primary_min: 4,
+      primary_max: 5,
+      secondary_min: 2,
+      secondary_max: 3
+    }
+  };
+
+  const dbRule = state.rarityRuleMap.get(key);
+  if (dbRule) return dbRule;
+
+  return fallbackRules[key] || null;
 }
 
 function getRarityRollBounds(rarity) {
   const rule = getRarityRule(rarity);
+
   console.log("RARITY RULE DEBUG", {
     rarity,
     rule
@@ -1009,41 +1056,26 @@ function getRarityRollBounds(rarity) {
   }
 
   return {
-    primaryMin:
-      rule.primary_affix_min ??
+    primaryMin: Number(
       rule.primary_min ??
-      rule.random_primary_min ??
-      rule.min_primary_affixes ??
-      rule.primary_affixes_min ??
-      rule.primary_affix_min_count ??
-      0,
-
-    primaryMax:
-      rule.primary_affix_max ??
-      rule.primary_max ??
-      rule.random_primary_max ??
-      rule.max_primary_affixes ??
-      rule.primary_affixes_max ??
-      rule.primary_affix_max_count ??
-      0,
-
-    secondaryMin:
-      rule.secondary_affix_min ??
-      rule.secondary_min ??
-      rule.random_secondary_min ??
-      rule.min_secondary_affixes ??
-      rule.secondary_affixes_min ??
-      rule.secondary_affix_min_count ??
-      0,
-
-    secondaryMax:
-      rule.secondary_affix_max ??
-      rule.secondary_max ??
-      rule.random_secondary_max ??
-      rule.max_secondary_affixes ??
-      rule.secondary_affixes_max ??
-      rule.secondary_affix_max_count ??
+      rule.primary_affix_min ??
       0
+    ),
+    primaryMax: Number(
+      rule.primary_max ??
+      rule.primary_affix_max ??
+      0
+    ),
+    secondaryMin: Number(
+      rule.secondary_min ??
+      rule.secondary_affix_min ??
+      0
+    ),
+    secondaryMax: Number(
+      rule.secondary_max ??
+      rule.secondary_affix_max ??
+      0
+    )
   };
 }
 
@@ -1897,12 +1929,16 @@ function buildPreviewData(baseItem, modules, powerData) {
 
   const remainingPrimary = Math.max(
     0,
-    Number(rarityBounds.primaryMax || 0) - fixedPrimaryCount - explicitRandomPrimaryCount
+    Number(rarityBounds.primaryMax || 0) -
+      Number(fixedPrimaryCount || 0) -
+      Number(explicitRandomPrimaryCount || 0)
   );
 
   const remainingSecondary = Math.max(
     0,
-    Number(rarityBounds.secondaryMax || 0) - fixedSecondaryCount - explicitRandomSecondaryCount
+    Number(rarityBounds.secondaryMax || 0) -
+      Number(fixedSecondaryCount || 0) -
+      Number(explicitRandomSecondaryCount || 0)
   );
 
   console.log("PREVIEW RANDOM REMAINING", {
