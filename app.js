@@ -817,6 +817,7 @@ async function loadReferenceData() {
   if (equipSlotsRes.error) throw equipSlotsRes.error;
   if (affixesRes.error) throw affixesRes.error;
   if (rarityRulesRes.error) throw rarityRulesRes.error;
+  console.log("rarityRulesRes", rarityRulesRes);
   if (allowedRowsRes.error) throw allowedRowsRes.error;
 
   state.equipSlotItemTypes = equipSlotItemTypesRes.data || [];
@@ -832,17 +833,24 @@ async function loadReferenceData() {
   });
 
   state.rarityRuleMap = new Map();
+
+  console.log("RARITY RULE RAW DATA", state.itemRarityRules);
+
   state.itemRarityRules.forEach(rule => {
-    const rarityKey =
-      rule.rarity ||
-      rule.rarity_code ||
-      rule.item_rarity ||
-      rule.code;
+    const rarityKey = String(
+      rule.rarity ??
+      rule.rarity_code ??
+      rule.item_rarity ??
+      rule.code ??
+      ""
+    ).trim().toLowerCase();
 
     if (rarityKey) {
       state.rarityRuleMap.set(rarityKey, rule);
     }
   });
+
+  console.log("RARITY RULE MAP KEYS", [...state.rarityRuleMap.keys()]);
 
   state.affixAllowedByType = new Map();
   (allowedRowsRes.data || []).forEach(row => {
@@ -980,7 +988,8 @@ function rankAffixesForItemType(itemType, category = null, search = "", onlyAllo
 }
 
 function getRarityRule(rarity) {
-  return state.rarityRuleMap.get(rarity) || null;
+  const key = String(rarity || "").trim().toLowerCase();
+  return state.rarityRuleMap.get(key) || null;
 }
 
 function getRarityRollBounds(rarity) {
@@ -2126,7 +2135,13 @@ function validateBaseItem(baseItem, modules, powerData) {
   if (!baseItem.item_type) messages.push("• Bitte ein genaues Item auswählen.");
   if (!baseItem.display_name) messages.push("• Bitte einen Anzeigenamen eingeben.");
   if (!baseItem.item_code) messages.push("• item_code fehlt.");
-  if (!baseItem.equip_slot && baseItem.is_equippable) messages.push("• Für dieses item_type konnte kein equip_slot bestimmt werden.");
+  if (baseItem.is_equippable && !String(baseItem.equip_slot || "").trim()) {
+    messages.push("• Für dieses item_type konnte kein equip_slot bestimmt werden.");
+  }
+  console.log("VALIDATE equip_slot", {
+    item_type: baseItem.item_type,
+    equip_slot: baseItem.equip_slot
+  });
   if (baseItem.level_requirement < 1) messages.push("• Level Requirement muss mindestens 1 sein.");
 
   if (baseItem.inventory_width < 1 || baseItem.inventory_height < 1) {
