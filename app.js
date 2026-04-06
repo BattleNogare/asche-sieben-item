@@ -533,42 +533,72 @@ function getEffectiveItemStructure() {
 function getBestEquipSlotForItemType(itemType) {
   if (!itemType) return "";
 
+  const rows = (state.equipSlotItemTypes || [])
+    .filter(row => row.item_type === itemType && row.is_enabled !== false)
+    .sort((a, b) => (a.sort_order ?? 9999) - (b.sort_order ?? 9999));
+
+  if (rows.length > 0) {
+    return rows[0].equip_slot || "";
+  }
+
   const direct = state.itemTypeToSlot.get(itemType);
   if (direct) return direct;
 
-  const rows = state.equipSlotItemTypes.filter(row => row.item_type === itemType && row.is_enabled !== false);
-  if (!rows.length) return "";
+  const fallbackMap = {
+    shield: "weapon_off",
+    crusader_shield: "weapon_off",
+    orb: "weapon_off",
+    quiver: "weapon_off",
+    book: "weapon_off",
 
-  const preferredOrder = [
-    "weapon_main",
-    "weapon_off",
-    "head",
-    "shoulders",
-    "chest",
-    "hands",
-    "legs",
-    "feet",
-    "amulet",
-    "ring_1",
-    "ring_2",
-    "belt",
-    "backpack",
-    "artifact",
-    "companion_focus",
-    "companion_mark",
-    "companion_relic"
-  ];
+    helmet: "head",
+    soulstone: "head",
+    mask: "head",
+    hat: "head",
 
-  rows.sort((a, b) => {
-    const aIndex = preferredOrder.indexOf(a.equip_slot);
-    const bIndex = preferredOrder.indexOf(b.equip_slot);
-    const ax = aIndex === -1 ? 999 : aIndex;
-    const bx = bIndex === -1 ? 999 : bIndex;
-    if (ax !== bx) return ax - bx;
-    return (a.sort_order ?? 9999) - (b.sort_order ?? 9999);
-  });
+    shoulder_armor: "shoulders",
+    chest_armor: "chest",
+    cloak: "chest",
+    bracer: "sleeve",
+    gloves: "hand",
+    belt: "belt",
+    mighty_belt: "belt",
+    pants: "legs",
+    boots: "feet",
 
-  return rows[0]?.equip_slot || "";
+    amulet: "amulet",
+    ring: "ring_1",
+
+    backpack: "backpack",
+    artifact: "artifact",
+    companion_focus: "companion_focus",
+    companion_mark: "companion_mark",
+    companion_relic: "companion_relic",
+
+    axe_1h: "weapon_main",
+    dagger: "weapon_main",
+    mace_1h: "weapon_main",
+    spear: "weapon_main",
+    sword_1h: "weapon_main",
+    ceremonial_knife: "weapon_main",
+    fist_weapon: "weapon_main",
+    flail_1h: "weapon_main",
+    mighty_weapon_1h: "weapon_main",
+    scythe_1h: "weapon_main",
+    mace_2h: "weapon_main",
+    polearm: "weapon_main",
+    staff: "weapon_main",
+    sword_2h: "weapon_main",
+    flail_2h: "weapon_main",
+    mighty_weapon_2h: "weapon_main",
+    scythe_2h: "weapon_main",
+    bow: "weapon_main",
+    crossbow: "weapon_main",
+    hand_crossbow: "weapon_main",
+    wand: "weapon_main"
+  };
+
+  return fallbackMap[itemType] || "";
 }
 
 async function generateUniqueItemCode(displayName, itemType, existingItemId = null) {
@@ -1517,6 +1547,11 @@ function refreshCreateDerivedFields() {
   syncDerivedFlagDefaults("create");
   refreshCreateItemCode();
   updateCreatePreview();
+  console.log("CREATE item_type -> equip_slot", {
+    itemType,
+    equipSlot,
+    matchingRows: state.equipSlotItemTypes.filter(x => x.item_type === itemType)
+  });
 }
 
 function refreshEditDerivedFields() {
@@ -1532,6 +1567,11 @@ function refreshEditDerivedFields() {
   refreshAffixModuleSelects($("editAffixModuleList"), itemType);
   syncDerivedFlagDefaults("edit");
   updateEditPreview();
+  console.log("EDIT item_type -> equip_slot", {
+    itemType,
+    equipSlot,
+    matchingRows: state.equipSlotItemTypes.filter(x => x.item_type === itemType)
+  });
 }
 
 async function refreshCreateItemCode() {
@@ -1755,14 +1795,18 @@ function buildPreviewData(baseItem, modules, powerData) {
 
   let fixedPrimaryCount = 0;
   let fixedSecondaryCount = 0;
+  let explicitRandomPrimaryCount = 0;
+  let explicitRandomSecondaryCount = 0;
 
   modules.forEach(mod => {
     if (mod.kind === "fixed" && mod.affix_definition) {
       const line = buildDescriptionFromAffix(mod.affix_definition);
+
       if (mod.property_category === "primary") {
         primaryLines.push(line);
         fixedPrimaryCount += 1;
       }
+
       if (mod.property_category === "secondary") {
         secondaryLines.push(line);
         fixedSecondaryCount += 1;
@@ -1772,12 +1816,19 @@ function buildPreviewData(baseItem, modules, powerData) {
     if (mod.kind === "random_fill") {
       const count = mod.choose_count || 1;
       const label = mod.display_label?.trim() || `+ ${count} zufällige Eigenschaften`;
+
       secondaryLines.push(label);
+
+      if (mod.property_category === "primary") {
+        explicitRandomPrimaryCount += count;
+      } else {
+        explicitRandomSecondaryCount += count;
+      }
     }
 
     if (mod.kind === "choice_group") {
       const bucket = mod.property_category === "secondary" ? secondaryLines : primaryLines;
-      bucket.push(mod.display_label);
+      bucket.push(mod.display_label || "Eine von mehreren Eigenschaften");
       mod.options.forEach(opt => {
         bucket.push(`• ${buildDescriptionFromAffix(opt.affix_definition)}`);
       });
@@ -1785,8 +1836,16 @@ function buildPreviewData(baseItem, modules, powerData) {
   });
 
   const rarityBounds = getRarityRollBounds(baseItem.rarity);
-  const remainingPrimary = Math.max(0, rarityBounds.primaryMax - fixedPrimaryCount);
-  const remainingSecondary = Math.max(0, rarityBounds.secondaryMax - fixedSecondaryCount);
+
+  const remainingPrimary = Math.max(
+    0,
+    rarityBounds.primaryMax - fixedPrimaryCount - explicitRandomPrimaryCount
+  );
+
+  const remainingSecondary = Math.max(
+    0,
+    rarityBounds.secondaryMax - fixedSecondaryCount - explicitRandomSecondaryCount
+  );
 
   if (remainingPrimary > 0) {
     secondaryLines.push(`+ ${remainingPrimary} zufällige Primary-Eigenschaften`);
@@ -1800,11 +1859,13 @@ function buildPreviewData(baseItem, modules, powerData) {
     let line = powerData.description;
     const min = powerData.value_min;
     const max = powerData.value_max;
+
     if (line.includes("{value}")) {
       line = line.replaceAll("{value}", `[${min ?? ""}-${max ?? ""}]`);
     } else if (min !== null || max !== null) {
       line += ` [${min ?? ""}-${max ?? ""}]`;
     }
+
     powerLines.push(line.trim());
   }
 
