@@ -175,11 +175,6 @@ function parseNullableNumber(value, integer = false) {
   return Number.isNaN(num) ? null : num;
 }
 
-function toBool(value, fallback = false) {
-  if (value === null || value === undefined) return fallback;
-  return !!value;
-}
-
 function slugify(input) {
   return String(input || "")
     .toLowerCase()
@@ -370,70 +365,6 @@ function isAllowedUser() {
   return state.user?.id === ALLOWED_PROFILE_ID || state.profile?.id === ALLOWED_PROFILE_ID;
 }
 
-function getAllowedAffixIdsForItemType(itemType) {
-  return state.affixAllowedByType.get(itemType) || new Set();
-}
-
-function getAllKnownItemTypes() {
-  const allKnownItemTypes = new Set();
-
-  Object.values(FALLBACK_ITEM_STRUCTURE).forEach(subMap => {
-    Object.values(subMap).forEach(entries => {
-      entries.forEach(entry => {
-        if (entry?.item_type) allKnownItemTypes.add(entry.item_type);
-      });
-    });
-  });
-
-  state.equipSlotItemTypes.forEach(row => {
-    if (row?.item_type) allKnownItemTypes.add(row.item_type);
-  });
-
-  state.items.forEach(item => {
-    if (item?.item_type) allKnownItemTypes.add(item.item_type);
-  });
-
-  state.itemTypeDefinitions.forEach((_, key) => {
-    allKnownItemTypes.add(key);
-  });
-
-  return Array.from(allKnownItemTypes);
-}
-
-function getItemTypeMeta(itemType) {
-  return state.itemTypeDefinitions.get(itemType) || null;
-}
-
-function getDynamicStructure() {
-  const structure = {};
-
-  for (const itemType of getAllKnownItemTypes()) {
-    const meta = getItemTypeMeta(itemType);
-    const family = meta?.family || inferFamilyFromItemType(itemType);
-    const subfamily = meta?.subfamily || inferSubfamilyFromItemType(itemType);
-    const label = meta?.label || buildHumanItemTypeLabel(itemType);
-
-    if (!structure[family]) structure[family] = {};
-    if (!structure[family][subfamily]) structure[family][subfamily] = [];
-
-    structure[family][subfamily].push({ label, item_type: itemType });
-  }
-
-  Object.values(structure).forEach(subMap => {
-    Object.values(subMap).forEach(entries => {
-      entries.sort((a, b) => a.label.localeCompare(b.label, "de"));
-    });
-  });
-
-  return structure;
-}
-
-function getEffectiveItemStructure() {
-  const dynamic = getDynamicStructure();
-  if (Object.keys(dynamic).length) return dynamic;
-  return FALLBACK_ITEM_STRUCTURE;
-}
-
 function buildHumanItemTypeLabel(itemType) {
   return String(itemType || "")
     .replaceAll("_", " ")
@@ -522,6 +453,36 @@ function inferSubfamilyFromItemType(itemType) {
   return map[itemType] || "Sonstige";
 }
 
+function getAllKnownItemTypes() {
+  const allKnownItemTypes = new Set();
+
+  Object.values(FALLBACK_ITEM_STRUCTURE).forEach(subMap => {
+    Object.values(subMap).forEach(entries => {
+      entries.forEach(entry => {
+        if (entry?.item_type) allKnownItemTypes.add(entry.item_type);
+      });
+    });
+  });
+
+  state.equipSlotItemTypes.forEach(row => {
+    if (row?.item_type) allKnownItemTypes.add(row.item_type);
+  });
+
+  state.items.forEach(item => {
+    if (item?.item_type) allKnownItemTypes.add(item.item_type);
+  });
+
+  state.itemTypeDefinitions.forEach((_, key) => {
+    allKnownItemTypes.add(key);
+  });
+
+  return Array.from(allKnownItemTypes);
+}
+
+function getItemTypeMeta(itemType) {
+  return state.itemTypeDefinitions.get(itemType) || null;
+}
+
 function getFamilyOfItemType(itemType) {
   const structure = getEffectiveItemStructure();
 
@@ -537,6 +498,77 @@ function getFamilyOfItemType(itemType) {
     family: inferFamilyFromItemType(itemType),
     subfamily: inferSubfamilyFromItemType(itemType)
   };
+}
+
+function getDynamicStructure() {
+  const structure = {};
+
+  for (const itemType of getAllKnownItemTypes()) {
+    const meta = getItemTypeMeta(itemType);
+    const family = meta?.family || inferFamilyFromItemType(itemType);
+    const subfamily = meta?.subfamily || inferSubfamilyFromItemType(itemType);
+    const label = meta?.label || buildHumanItemTypeLabel(itemType);
+
+    if (!structure[family]) structure[family] = {};
+    if (!structure[family][subfamily]) structure[family][subfamily] = [];
+
+    structure[family][subfamily].push({ label, item_type: itemType });
+  }
+
+  Object.values(structure).forEach(subMap => {
+    Object.values(subMap).forEach(entries => {
+      entries.sort((a, b) => a.label.localeCompare(b.label, "de"));
+    });
+  });
+
+  return structure;
+}
+
+function getEffectiveItemStructure() {
+  const dynamic = getDynamicStructure();
+  if (Object.keys(dynamic).length) return dynamic;
+  return FALLBACK_ITEM_STRUCTURE;
+}
+
+function getBestEquipSlotForItemType(itemType) {
+  if (!itemType) return "";
+
+  const direct = state.itemTypeToSlot.get(itemType);
+  if (direct) return direct;
+
+  const rows = state.equipSlotItemTypes.filter(row => row.item_type === itemType && row.is_enabled !== false);
+  if (!rows.length) return "";
+
+  const preferredOrder = [
+    "weapon_main",
+    "weapon_off",
+    "head",
+    "shoulders",
+    "chest",
+    "hands",
+    "legs",
+    "feet",
+    "amulet",
+    "ring_1",
+    "ring_2",
+    "belt",
+    "backpack",
+    "artifact",
+    "companion_focus",
+    "companion_mark",
+    "companion_relic"
+  ];
+
+  rows.sort((a, b) => {
+    const aIndex = preferredOrder.indexOf(a.equip_slot);
+    const bIndex = preferredOrder.indexOf(b.equip_slot);
+    const ax = aIndex === -1 ? 999 : aIndex;
+    const bx = bIndex === -1 ? 999 : bIndex;
+    if (ax !== bx) return ax - bx;
+    return (a.sort_order ?? 9999) - (b.sort_order ?? 9999);
+  });
+
+  return rows[0]?.equip_slot || "";
 }
 
 async function generateUniqueItemCode(displayName, itemType, existingItemId = null) {
@@ -626,12 +658,10 @@ function fuzzyScoreAffix(def, query) {
 
 function getAffixDisplayLabel(def) {
   if (!def) return "";
-
   const code = String(def.affix_code || "");
   if (code === "socket_1_primary") return "(1) Sockel";
   if (code === "socket_2_primary") return "(2) Sockel";
   if (code === "socket_3_primary") return "(3) Sockel";
-
   return String(def.description_template || def.affix_code || "").trim();
 }
 
@@ -643,21 +673,56 @@ function pushAffixSearchEntry(itemType, entry) {
   state.affixSearchPoolByType.get(itemType).push(entry);
 }
 
+function buildItemTypeDefinitionsFromData() {
+  state.itemTypeDefinitions = new Map();
+
+  for (const [family, subMap] of Object.entries(FALLBACK_ITEM_STRUCTURE)) {
+    for (const [subfamily, entries] of Object.entries(subMap)) {
+      entries.forEach(entry => {
+        state.itemTypeDefinitions.set(entry.item_type, {
+          item_type: entry.item_type,
+          family,
+          subfamily,
+          label: entry.label
+        });
+      });
+    }
+  }
+
+  state.items.forEach(item => {
+    if (!item?.item_type) return;
+    if (!state.itemTypeDefinitions.has(item.item_type)) {
+      state.itemTypeDefinitions.set(item.item_type, {
+        item_type: item.item_type,
+        family: inferFamilyFromItemType(item.item_type),
+        subfamily: inferSubfamilyFromItemType(item.item_type),
+        label: buildHumanItemTypeLabel(item.item_type)
+      });
+    }
+  });
+
+  state.equipSlotItemTypes.forEach(row => {
+    if (!row?.item_type) return;
+    if (!state.itemTypeDefinitions.has(row.item_type)) {
+      state.itemTypeDefinitions.set(row.item_type, {
+        item_type: row.item_type,
+        family: inferFamilyFromItemType(row.item_type),
+        subfamily: inferSubfamilyFromItemType(row.item_type),
+        label: buildHumanItemTypeLabel(row.item_type)
+      });
+    }
+  });
+}
+
 function buildAffixSearchPools() {
   state.affixSearchPoolByType = new Map();
-
   const allKnownItemTypes = getAllKnownItemTypes();
 
   allKnownItemTypes.forEach(itemType => {
-    const allowedSet = state.affixAllowedByType.get(itemType) || new Set();
-
     state.affixDefinitions.forEach(def => {
-      const defId = idKey(def.id);
-      if (allowedSet.size && !allowedSet.has(defId)) return;
-
       pushAffixSearchEntry(itemType, {
         source: "affix_definitions",
-        source_id: defId,
+        source_id: idKey(def.id),
         affix_code: def.affix_code,
         affix_category: def.affix_category,
         stat_name: def.stat_name,
@@ -703,48 +768,6 @@ function buildAffixSearchPools() {
   }
 }
 
-function buildItemTypeDefinitionsFromData() {
-  state.itemTypeDefinitions = new Map();
-
-  const structure = FALLBACK_ITEM_STRUCTURE;
-  for (const [family, subMap] of Object.entries(structure)) {
-    for (const [subfamily, entries] of Object.entries(subMap)) {
-      entries.forEach(entry => {
-        state.itemTypeDefinitions.set(entry.item_type, {
-          item_type: entry.item_type,
-          family,
-          subfamily,
-          label: entry.label
-        });
-      });
-    }
-  }
-
-  state.items.forEach(item => {
-    if (!item?.item_type) return;
-    if (!state.itemTypeDefinitions.has(item.item_type)) {
-      state.itemTypeDefinitions.set(item.item_type, {
-        item_type: item.item_type,
-        family: inferFamilyFromItemType(item.item_type),
-        subfamily: inferSubfamilyFromItemType(item.item_type),
-        label: buildHumanItemTypeLabel(item.item_type)
-      });
-    }
-  });
-
-  state.equipSlotItemTypes.forEach(row => {
-    if (!row?.item_type) return;
-    if (!state.itemTypeDefinitions.has(row.item_type)) {
-      state.itemTypeDefinitions.set(row.item_type, {
-        item_type: row.item_type,
-        family: inferFamilyFromItemType(row.item_type),
-        subfamily: inferSubfamilyFromItemType(row.item_type),
-        label: buildHumanItemTypeLabel(row.item_type)
-      });
-    }
-  });
-}
-
 async function loadReferenceData() {
   const [
     equipSlotItemTypesRes,
@@ -773,7 +796,9 @@ async function loadReferenceData() {
 
   state.itemTypeToSlot = new Map();
   state.equipSlotItemTypes.forEach(row => {
-    state.itemTypeToSlot.set(row.item_type, row.equip_slot);
+    if (!state.itemTypeToSlot.has(row.item_type)) {
+      state.itemTypeToSlot.set(row.item_type, row.equip_slot);
+    }
   });
 
   state.rarityRuleMap = new Map();
@@ -896,16 +921,19 @@ function getSelectedItemType(prefix) {
   return $(`${prefix}_item_type`)?.value || "";
 }
 
-function getAllowedAffixesForItemType(itemType, category = null) {
+function getAllowedAffixesForItemType(itemType, category = null, onlyAllowed = false) {
   const pool = state.affixSearchPoolByType.get(itemType) || [];
+  const allowedIds = state.affixAllowedByType.get(itemType) || new Set();
+
   return pool.filter(def => {
     if (category && def.affix_category !== category) return false;
+    if (onlyAllowed && allowedIds.size && !allowedIds.has(idKey(def.source_id))) return false;
     return true;
   });
 }
 
-function rankAffixesForItemType(itemType, category = null, search = "") {
-  return getAllowedAffixesForItemType(itemType, category)
+function rankAffixesForItemType(itemType, category = null, search = "", onlyAllowed = false) {
+  return getAllowedAffixesForItemType(itemType, category, onlyAllowed)
     .map(def => ({
       ...def,
       _score: fuzzyScoreAffix(def, search)
@@ -925,23 +953,35 @@ function getRarityRule(rarity) {
   return state.rarityRuleMap.get(rarity) || null;
 }
 
+function getRarityRollBounds(rarity) {
+  const rule = getRarityRule(rarity);
+  if (!rule) {
+    return {
+      primaryMin: 0,
+      primaryMax: 0,
+      secondaryMin: 0,
+      secondaryMax: 0
+    };
+  }
+
+  return {
+    primaryMin: rule.primary_min ?? rule.random_primary_min ?? rule.min_primary_affixes ?? rule.primary_affixes_min ?? rule.primary_affix_min ?? 0,
+    primaryMax: rule.primary_max ?? rule.random_primary_max ?? rule.max_primary_affixes ?? rule.primary_affixes_max ?? rule.primary_affix_max ?? 0,
+    secondaryMin: rule.secondary_min ?? rule.random_secondary_min ?? rule.min_secondary_affixes ?? rule.secondary_affixes_min ?? rule.secondary_affix_min ?? 0,
+    secondaryMax: rule.secondary_max ?? rule.random_secondary_max ?? rule.max_secondary_affixes ?? rule.secondary_affixes_max ?? rule.secondary_affix_max ?? 0
+  };
+}
+
 function applyRarityDefaults(prefix) {
   const rarityEl = $(`${prefix}_rarity`);
   if (!rarityEl) return;
 
-  const rarity = rarityEl.value;
-  const rule = getRarityRule(rarity);
-  if (!rule) return;
+  const bounds = getRarityRollBounds(rarityEl.value);
 
-  const pMin = rule.primary_min ?? rule.random_primary_min ?? rule.min_primary_affixes ?? rule.primary_affixes_min ?? rule.primary_affix_min ?? 0;
-  const pMax = rule.primary_max ?? rule.random_primary_max ?? rule.max_primary_affixes ?? rule.primary_affixes_max ?? rule.primary_affix_max ?? 0;
-  const sMin = rule.secondary_min ?? rule.random_secondary_min ?? rule.min_secondary_affixes ?? rule.secondary_affixes_min ?? rule.secondary_affix_min ?? 0;
-  const sMax = rule.secondary_max ?? rule.random_secondary_max ?? rule.max_secondary_affixes ?? rule.secondary_affixes_max ?? rule.secondary_affix_max ?? 0;
-
-  if ($(`${prefix}_random_primary_min`)) $(`${prefix}_random_primary_min`).value = pMin;
-  if ($(`${prefix}_random_primary_max`)) $(`${prefix}_random_primary_max`).value = pMax;
-  if ($(`${prefix}_random_secondary_min`)) $(`${prefix}_random_secondary_min`).value = sMin;
-  if ($(`${prefix}_random_secondary_max`)) $(`${prefix}_random_secondary_max`).value = sMax;
+  if ($(`${prefix}_random_primary_min`)) $(`${prefix}_random_primary_min`).value = bounds.primaryMin;
+  if ($(`${prefix}_random_primary_max`)) $(`${prefix}_random_primary_max`).value = bounds.primaryMax;
+  if ($(`${prefix}_random_secondary_min`)) $(`${prefix}_random_secondary_min`).value = bounds.secondaryMin;
+  if ($(`${prefix}_random_secondary_max`)) $(`${prefix}_random_secondary_max`).value = bounds.secondaryMax;
 }
 
 function createTopHitsHtml() {
@@ -996,7 +1036,7 @@ function createAffixModuleHtml(prefix, moduleId, data = null) {
 
         <div class="row">
           <div class="field col-12">
-            <label>Fallback-Auswahl</label>
+            <label>Affix-Auswahl (alle Affixe)</label>
             <select class="affix-select"></select>
           </div>
         </div>
@@ -1040,7 +1080,7 @@ function createAffixModuleHtml(prefix, moduleId, data = null) {
         <div class="row">
           <div class="field col-4">
             <label>Beschreibung</label>
-            <input class="random-fill-description" type="text" value="${escapeHtml(data?.display_label || "+1 zufällige magische Eigenschaft")}" />
+            <input class="random-fill-description" type="text" value="${escapeHtml(data?.display_label || "+1 zufällige Eigenschaft")}" />
           </div>
           <div class="field col-2">
             <label>Anzahl</label>
@@ -1057,7 +1097,7 @@ function createAffixModuleHtml(prefix, moduleId, data = null) {
         <div class="row">
           <div class="field col-4">
             <label>Gruppen-Label</label>
-            <input class="choice-group-label" type="text" value="${escapeHtml(data?.display_label || "Eine von X magischen Eigenschaften (variiert)")}" />
+            <input class="choice-group-label" type="text" value="${escapeHtml(data?.display_label || "Eine von X Eigenschaften")}" />
           </div>
           <div class="field col-2">
             <label>Choose Count</label>
@@ -1094,7 +1134,7 @@ function createChoiceOptionHtml(data = null) {
 
       <div class="row">
         <div class="field col-10">
-          <label>Fallback-Auswahl</label>
+          <label>Affix-Auswahl (alle Affixe)</label>
           <select class="choice-option-affix-select"></select>
         </div>
         <div class="field col-2">
@@ -1218,14 +1258,14 @@ function refreshSingleAffixModule(mod, itemType) {
   randomFillBlock.classList.toggle("hidden", kind !== "random_fill");
   choiceBlock.classList.toggle("hidden", kind !== "choice_group");
 
-  const ranked = rankAffixesForItemType(itemType, category, search);
+  const rankedAll = rankAffixesForItemType(itemType, category, search, false);
 
   const fixedSelect = mod.querySelector(".affix-select");
   if (fixedSelect) {
     const previous = fixedSelect.dataset.value || fixedSelect.value || "";
     fixedSelect.innerHTML = `<option value="">- bitte wählen -</option>`;
 
-    ranked.slice(0, 250).forEach(def => {
+    rankedAll.slice(0, 300).forEach(def => {
       const opt = document.createElement("option");
       opt.value = `${def.source}:${idKey(def.source_id)}:${def.affix_category}:${def.affix_code}`;
       opt.textContent = `${def.affix_code} | ${getAffixDisplayLabel(def)}`;
@@ -1233,15 +1273,15 @@ function refreshSingleAffixModule(mod, itemType) {
     });
 
     let selectedValue = previous;
-    if (!selectedValue && ranked.length) {
-      const d = ranked[0];
+    if (!selectedValue && rankedAll.length) {
+      const d = rankedAll[0];
       selectedValue = `${d.source}:${idKey(d.source_id)}:${d.affix_category}:${d.affix_code}`;
     }
 
     fixedSelect.value = selectedValue;
     fixedSelect.dataset.value = selectedValue;
 
-    renderTopHits(mod.querySelector(".affix-top-hits"), ranked, (def) => {
+    renderTopHits(mod.querySelector(".affix-top-hits"), rankedAll, (def) => {
       const value = `${def.source}:${idKey(def.source_id)}:${def.affix_category}:${def.affix_code}`;
       fixedSelect.value = value;
       fixedSelect.dataset.value = value;
@@ -1256,7 +1296,7 @@ function refreshSingleAffixModule(mod, itemType) {
       refreshSingleAffixModule(mod, itemType);
     });
 
-    const selectedDef = ranked.find(d => `${d.source}:${idKey(d.source_id)}:${d.affix_category}:${d.affix_code}` === String(selectedValue));
+    const selectedDef = rankedAll.find(d => `${d.source}:${idKey(d.source_id)}:${d.affix_category}:${d.affix_code}` === String(selectedValue));
     if (selectedDef && !mod.dataset.fixedManualValues) {
       setAffixOverrideFields(mod, selectedDef, "fixed-");
     }
@@ -1264,7 +1304,7 @@ function refreshSingleAffixModule(mod, itemType) {
 
   mod.querySelectorAll(".choice-option").forEach(optionEl => {
     const optionSearch = optionEl.querySelector(".choice-option-search")?.value || "";
-    const optionRanked = rankAffixesForItemType(itemType, category, optionSearch);
+    const optionRanked = rankAffixesForItemType(itemType, category, optionSearch, false);
 
     const select = optionEl.querySelector(".choice-option-affix-select");
     if (!select) return;
@@ -1272,7 +1312,7 @@ function refreshSingleAffixModule(mod, itemType) {
     const previous = select.dataset.value || select.value || "";
     select.innerHTML = `<option value="">- bitte wählen -</option>`;
 
-    optionRanked.slice(0, 250).forEach(def => {
+    optionRanked.slice(0, 300).forEach(def => {
       const opt = document.createElement("option");
       opt.value = `${def.source}:${idKey(def.source_id)}:${def.affix_category}:${def.affix_code}`;
       opt.textContent = `${def.affix_code} | ${getAffixDisplayLabel(def)}`;
@@ -1344,7 +1384,8 @@ function bindAffixModuleEvents(container, prefix) {
         const ranked = rankAffixesForItemType(
           getSelectedItemType(prefix),
           mod.querySelector(".affix-property-category").value,
-          mod.querySelector(".affix-search").value || ""
+          mod.querySelector(".affix-search").value || "",
+          false
         );
         const def = ranked.find(d => `${d.source}:${idKey(d.source_id)}:${d.affix_category}:${d.affix_code}` === String(fixedSelect.value));
         mod.dataset.fixedManualValues = "";
@@ -1395,7 +1436,8 @@ function bindAffixModuleEvents(container, prefix) {
           const ranked = rankAffixesForItemType(
             getSelectedItemType(prefix),
             mod.querySelector(".affix-property-category").value,
-            optionEl.querySelector(".choice-option-search").value || ""
+            optionEl.querySelector(".choice-option-search").value || "",
+            false
           );
           const def = ranked.find(d => `${d.source}:${idKey(d.source_id)}:${d.affix_category}:${d.affix_code}` === String(select.value));
           optionEl.dataset.manualValues = "";
@@ -1435,7 +1477,7 @@ function bindAffixModuleEvents(container, prefix) {
 }
 
 function syncDerivedFlagDefaults(prefix) {
-  const baseItem = prefix === "create" ? collectBaseItemFromCreateForm(true) : collectBaseItemFromEditForm(true);
+  const baseItem = prefix === "create" ? collectBaseItemFromCreateForm() : collectBaseItemFromEditForm();
   const canDurabilityEl = $(`${prefix}_can_have_durability`);
   const canGemsEl = $(`${prefix}_can_have_gems`);
   const isEquippableEl = $(`${prefix}_is_equippable`);
@@ -1463,13 +1505,14 @@ function syncDerivedFlagDefaults(prefix) {
 
 function refreshCreateDerivedFields() {
   const itemType = getSelectedItemType("create");
-  const equipSlot = state.itemTypeToSlot.get(itemType) || "";
+  const equipSlot = getBestEquipSlotForItemType(itemType);
   if ($("create_equip_slot")) $("create_equip_slot").value = equipSlot;
 
   const family = getSelectedFamily("create");
   if ($("createWeaponBlock")) $("createWeaponBlock").classList.toggle("hidden", family !== "Waffen");
   if ($("createArmorBlock")) $("createArmorBlock").classList.toggle("hidden", !(family === "Rüstung" || equipSlot === "weapon_off"));
 
+  applyRarityDefaults("create");
   refreshAffixModuleSelects($("createAffixModuleList"), itemType);
   syncDerivedFlagDefaults("create");
   refreshCreateItemCode();
@@ -1478,13 +1521,14 @@ function refreshCreateDerivedFields() {
 
 function refreshEditDerivedFields() {
   const itemType = getSelectedItemType("edit");
-  const equipSlot = state.itemTypeToSlot.get(itemType) || "";
+  const equipSlot = getBestEquipSlotForItemType(itemType);
   if ($("edit_equip_slot")) $("edit_equip_slot").value = equipSlot;
 
   const family = getSelectedFamily("edit");
   if ($("editWeaponBlock")) $("editWeaponBlock").classList.toggle("hidden", family !== "Waffen");
   if ($("editArmorBlock")) $("editArmorBlock").classList.toggle("hidden", !(family === "Rüstung" || equipSlot === "weapon_off"));
 
+  applyRarityDefaults("edit");
   refreshAffixModuleSelects($("editAffixModuleList"), itemType);
   syncDerivedFlagDefaults("edit");
   updateEditPreview();
@@ -1506,20 +1550,49 @@ async function refreshCreateItemCode() {
   preview.value = code;
 }
 
-function buildDescriptionFromAffix(def) {
-  if (!def) return "";
-  let text = def.description_template || "";
+function formatAffixValueRange(def) {
+  const valueMin = def.rolls_socket_count ? (def.socket_count_min ?? def.value_min) : def.value_min;
+  const valueMax = def.rolls_socket_count ? (def.socket_count_max ?? def.value_max) : def.value_max;
+  const value2Min = def.value2_min;
+  const value2Max = def.value2_max;
 
-  let value = def.value_max ?? def.value_min;
-  let value2 = def.value2_max ?? def.value2_min;
+  let text = String(def.description_template || "").trim();
 
-  if (def.mod_type === "socket" || def.rolls_socket_count) {
-    value = def.socket_count_max ?? def.socket_count_min ?? value;
+  if (!text) {
+    const main = valueMin !== null || valueMax !== null
+      ? `[${valueMin ?? ""}-${valueMax ?? ""}]`
+      : "";
+    const second = value2Min !== null || value2Max !== null
+      ? ` [${value2Min ?? ""}-${value2Max ?? ""}]`
+      : "";
+    return `${def.stat_name || def.affix_code || ""} ${main}${second}`.trim();
   }
 
-  text = text.replaceAll("{value}", value !== null && value !== undefined ? String(value) : "");
-  text = text.replaceAll("{value2}", value2 !== null && value2 !== undefined ? String(value2) : "");
-  return text.trim();
+  const mainRange = (valueMin !== null || valueMax !== null)
+    ? `[${valueMin ?? ""}-${valueMax ?? ""}]`
+    : "";
+  const secondRange = (value2Min !== null || value2Max !== null)
+    ? `[${value2Min ?? ""}-${value2Max ?? ""}]`
+    : "";
+
+  text = text.replaceAll("{value}", mainRange || "");
+  text = text.replaceAll("{value2}", secondRange || "");
+
+  if (!text.includes("{value}") && !text.includes("{value2}")) {
+    if (mainRange && !text.includes(mainRange)) {
+      text = `${text} ${mainRange}`.trim();
+    }
+    if (secondRange && !text.includes(secondRange)) {
+      text = `${text} ${secondRange}`.trim();
+    }
+  }
+
+  return text.replace(/\s+/g, " ").trim();
+}
+
+function buildDescriptionFromAffix(def) {
+  if (!def) return "";
+  return formatAffixValueRange(def);
 }
 
 function collectAffixModules(prefix) {
@@ -1539,7 +1612,8 @@ function collectAffixModules(prefix) {
       const ranked = rankAffixesForItemType(
         getSelectedItemType(prefix),
         property_category,
-        mod.querySelector(".affix-search").value || ""
+        mod.querySelector(".affix-search").value || "",
+        false
       );
 
       const def = ranked.find(d => `${d.source}:${idKey(d.source_id)}:${d.affix_category}:${d.affix_code}` === String(selectValue));
@@ -1567,7 +1641,7 @@ function collectAffixModules(prefix) {
 
     if (kind === "random_fill") {
       const count = parseNullableNumber(mod.querySelector(".random-fill-count").value, true) || 1;
-      const displayLabel = mod.querySelector(".random-fill-description").value.trim() || `+${count} zufällige magische Eigenschaften`;
+      const displayLabel = mod.querySelector(".random-fill-description").value.trim() || `+ ${count} zufällige Eigenschaften`;
       const displayOrder = parseNullableNumber(mod.querySelector(".random-fill-order").value, true) || (idx + 1) * 10;
 
       modules.push({
@@ -1580,7 +1654,7 @@ function collectAffixModules(prefix) {
     }
 
     if (kind === "choice_group") {
-      const displayLabel = mod.querySelector(".choice-group-label").value.trim() || "Eine von X magischen Eigenschaften (variiert)";
+      const displayLabel = mod.querySelector(".choice-group-label").value.trim() || "Eine von X Eigenschaften";
       const chooseCount = parseNullableNumber(mod.querySelector(".choice-group-choose-count").value, true) || 1;
       const displayOrder = parseNullableNumber(mod.querySelector(".choice-group-order").value, true) || (idx + 1) * 10;
 
@@ -1592,7 +1666,8 @@ function collectAffixModules(prefix) {
         const ranked = rankAffixesForItemType(
           getSelectedItemType(prefix),
           property_category,
-          optEl.querySelector(".choice-option-search").value || ""
+          optEl.querySelector(".choice-option-search").value || "",
+          false
         );
 
         const def = ranked.find(d => `${d.source}:${idKey(d.source_id)}:${d.affix_category}:${d.affix_code}` === String(selectValue));
@@ -1645,7 +1720,7 @@ function buildPreviewHeaderLines(baseItem) {
       return [
         formatPreviewNumber(dps, 1),
         "Schaden pro Sekunde",
-        `${formatPreviewNumber(dmgMin, 0)}-${formatPreviewNumber(dmgMax, 0)} Schaden`,
+        `[${formatPreviewNumber(dmgMin, 0)}-${formatPreviewNumber(dmgMax, 0)}] Schaden`,
         `${formatPreviewNumber(aps, 2)} Angriffe pro Sekunde`
       ];
     }
@@ -1656,7 +1731,7 @@ function buildPreviewHeaderLines(baseItem) {
     const armorMax = parseNullableNumber(baseItem.armor_max, true);
 
     if (armorMin !== null && armorMax !== null) {
-      return [`${formatPreviewNumber(armorMin, 0)} - ${formatPreviewNumber(armorMax, 0)}`, "Rüstung"];
+      return [`[${formatPreviewNumber(armorMin, 0)}-${formatPreviewNumber(armorMax, 0)}]`, "Rüstung"];
     }
 
     const armorBase = parseNullableNumber(baseItem.armor_base, true);
@@ -1678,17 +1753,26 @@ function buildPreviewData(baseItem, modules, powerData) {
   const secondaryLines = [];
   const powerLines = [];
 
+  let fixedPrimaryCount = 0;
+  let fixedSecondaryCount = 0;
+
   modules.forEach(mod => {
     if (mod.kind === "fixed" && mod.affix_definition) {
       const line = buildDescriptionFromAffix(mod.affix_definition);
-      if (mod.property_category === "primary") primaryLines.push(line);
-      if (mod.property_category === "secondary") secondaryLines.push(line);
+      if (mod.property_category === "primary") {
+        primaryLines.push(line);
+        fixedPrimaryCount += 1;
+      }
+      if (mod.property_category === "secondary") {
+        secondaryLines.push(line);
+        fixedSecondaryCount += 1;
+      }
     }
 
     if (mod.kind === "random_fill") {
-      const line = mod.display_label;
-      if (mod.property_category === "primary") primaryLines.push(line);
-      if (mod.property_category === "secondary") secondaryLines.push(line);
+      const count = mod.choose_count || 1;
+      const label = mod.display_label?.trim() || `+ ${count} zufällige Eigenschaften`;
+      secondaryLines.push(label);
     }
 
     if (mod.kind === "choice_group") {
@@ -1700,16 +1784,28 @@ function buildPreviewData(baseItem, modules, powerData) {
     }
   });
 
+  const rarityBounds = getRarityRollBounds(baseItem.rarity);
+  const remainingPrimary = Math.max(0, rarityBounds.primaryMax - fixedPrimaryCount);
+  const remainingSecondary = Math.max(0, rarityBounds.secondaryMax - fixedSecondaryCount);
+
+  if (remainingPrimary > 0) {
+    secondaryLines.push(`+ ${remainingPrimary} zufällige Primary-Eigenschaften`);
+  }
+
+  if (remainingSecondary > 0) {
+    secondaryLines.push(`+ ${remainingSecondary} zufällige Secondary-Eigenschaften`);
+  }
+
   if (powerData?.enabled && powerData.description) {
     let line = powerData.description;
+    const min = powerData.value_min;
+    const max = powerData.value_max;
     if (line.includes("{value}")) {
-      line = line.replaceAll("{value}", String(powerData.value_max ?? powerData.value_min ?? ""));
-    } else if ((powerData.value_min ?? null) !== null || (powerData.value_max ?? null) !== null) {
-      const a = powerData.value_min ?? "";
-      const b = powerData.value_max ?? "";
-      if (a !== "" && b !== "") line += ` [${a} - ${b}]`;
+      line = line.replaceAll("{value}", `[${min ?? ""}-${max ?? ""}]`);
+    } else if (min !== null || max !== null) {
+      line += ` [${min ?? ""}-${max ?? ""}]`;
     }
-    powerLines.push(line);
+    powerLines.push(line.trim());
   }
 
   const footer = [];
@@ -1794,10 +1890,10 @@ function renderTooltipPreview(targetId, previewData) {
     </div>`;
 }
 
-function collectBaseItemFromCreateForm(skipFlagSync = false) {
+function collectBaseItemFromCreateForm() {
   const itemType = getSelectedItemType("create");
   const family = getSelectedFamily("create");
-  const equipSlot = $("create_equip_slot")?.value || "";
+  const equipSlot = getBestEquipSlotForItemType(itemType);
   const inferredArchetype = inferTooltipArchetype(itemType, equipSlot, family);
 
   return {
@@ -1844,10 +1940,10 @@ function collectBaseItemFromCreateForm(skipFlagSync = false) {
   };
 }
 
-function collectBaseItemFromEditForm(skipFlagSync = false) {
+function collectBaseItemFromEditForm() {
   const itemType = getSelectedItemType("edit");
   const family = getSelectedFamily("edit");
-  const equipSlot = $("edit_equip_slot")?.value || "";
+  const equipSlot = getBestEquipSlotForItemType(itemType);
   const inferredArchetype = inferTooltipArchetype(itemType, equipSlot, family);
 
   return {
@@ -1951,34 +2047,6 @@ function validateBaseItem(baseItem, modules, powerData) {
     }
     if (baseItem.armor_min !== null && baseItem.armor_max !== null && baseItem.armor_min > baseItem.armor_max) {
       messages.push("• armor_min darf nicht größer als armor_max sein.");
-    }
-  }
-
-  const rarityRule = getRarityRule(baseItem.rarity);
-  if (rarityRule) {
-    const pMin = rarityRule.primary_min ?? rarityRule.random_primary_min ?? rarityRule.min_primary_affixes ?? rarityRule.primary_affixes_min ?? rarityRule.primary_affix_min ?? 0;
-    const pMax = rarityRule.primary_max ?? rarityRule.random_primary_max ?? rarityRule.max_primary_affixes ?? rarityRule.primary_affixes_max ?? rarityRule.primary_affix_max ?? 0;
-    const sMin = rarityRule.secondary_min ?? rarityRule.random_secondary_min ?? rarityRule.min_secondary_affixes ?? rarityRule.secondary_affixes_min ?? rarityRule.secondary_affix_min ?? 0;
-    const sMax = rarityRule.secondary_max ?? rarityRule.random_secondary_max ?? rarityRule.max_secondary_affixes ?? rarityRule.secondary_affixes_max ?? rarityRule.secondary_affix_max ?? 0;
-
-    if (baseItem.random_primary_min < 0 || baseItem.random_primary_max < 0 || baseItem.random_secondary_min < 0 || baseItem.random_secondary_max < 0) {
-      messages.push("• Random-Affix-Werte dürfen nicht negativ sein.");
-    }
-
-    if (baseItem.random_primary_min > baseItem.random_primary_max) {
-      messages.push("• Random Primary Min darf nicht größer als Max sein.");
-    }
-
-    if (baseItem.random_secondary_min > baseItem.random_secondary_max) {
-      messages.push("• Random Secondary Min darf nicht größer als Max sein.");
-    }
-
-    if (baseItem.random_primary_min < pMin || baseItem.random_primary_max > pMax) {
-      messages.push(`• Random Primary liegt außerhalb der bekannten Rarity-Rule (${pMin}-${pMax}).`);
-    }
-
-    if (baseItem.random_secondary_min < sMin || baseItem.random_secondary_max > sMax) {
-      messages.push(`• Random Secondary liegt außerhalb der bekannten Rarity-Rule (${sMin}-${sMax}).`);
     }
   }
 
@@ -2385,7 +2453,7 @@ function renderEditItemList() {
 }
 
 function findAffixDefinitionLike(row, itemType, propertyCategory) {
-  const ranked = rankAffixesForItemType(itemType, propertyCategory, row.stat_name || row.description_template || "");
+  const ranked = rankAffixesForItemType(itemType, propertyCategory, row.stat_name || row.description_template || "", false);
 
   const scored = ranked.map(def => {
     let score = 0;
@@ -2451,10 +2519,6 @@ function fillEditForm(item, fixedRows, groups, options) {
   if ($("edit_armor_min")) $("edit_armor_min").value = item.armor_min ?? "";
   if ($("edit_armor_max")) $("edit_armor_max").value = item.armor_max ?? "";
   if ($("edit_block_base")) $("edit_block_base").value = item.block_base ?? "";
-  if ($("edit_random_primary_min")) $("edit_random_primary_min").value = item.random_primary_min ?? 0;
-  if ($("edit_random_primary_max")) $("edit_random_primary_max").value = item.random_primary_max ?? 0;
-  if ($("edit_random_secondary_min")) $("edit_random_secondary_min").value = item.random_secondary_min ?? 0;
-  if ($("edit_random_secondary_max")) $("edit_random_secondary_max").value = item.random_secondary_max ?? 0;
   if ($("edit_binding_mode")) $("edit_binding_mode").value = item.binding_mode || "tradable";
   if ($("edit_is_unique_equipped")) $("edit_is_unique_equipped").checked = !!item.is_unique_equipped;
   if ($("edit_is_crafted")) $("edit_is_crafted").checked = item.source_type === "crafted";
@@ -2486,7 +2550,11 @@ function fillEditForm(item, fixedRows, groups, options) {
   if ($("edit_item_subfamily")) $("edit_item_subfamily").value = subfamily;
   $("edit_item_subfamily")?.dispatchEvent(new Event("change"));
   if ($("edit_item_type")) $("edit_item_type").value = item.item_type;
-  if ($("edit_equip_slot")) $("edit_equip_slot").value = item.equip_slot || state.itemTypeToSlot.get(item.item_type) || "";
+
+  const resolvedEquipSlot = getBestEquipSlotForItemType(item.item_type) || item.equip_slot || "";
+  if ($("edit_equip_slot")) $("edit_equip_slot").value = resolvedEquipSlot;
+
+  applyRarityDefaults("edit");
 
   const powerRow = fixedRows.find(r => r.property_category === "power");
   if ($("edit_has_power")) $("edit_has_power").checked = !!powerRow;
@@ -2530,7 +2598,7 @@ function fillEditForm(item, fixedRows, groups, options) {
     const groupOptions = options.filter(o => o.choice_group_id === group.id);
     const isRandomFill =
       groupOptions.length === 0 &&
-      String(group.display_label || "").toLowerCase().includes("zufällige");
+      String(group.display_label || "").toLowerCase().includes("zufäll");
 
     modRoot.insertAdjacentHTML("beforeend", createAffixModuleHtml("edit", `group_${idx}`, {
       kind: isRandomFill ? "random_fill" : "choice_group",
@@ -2669,10 +2737,6 @@ function wireCreateEvents() {
     "create_armor_min",
     "create_armor_max",
     "create_block_base",
-    "create_random_primary_min",
-    "create_random_primary_max",
-    "create_random_secondary_min",
-    "create_random_secondary_max",
     "create_is_unique_equipped",
     "create_binding_mode",
     "create_level_requirement",
@@ -2759,10 +2823,6 @@ function wireEditEvents() {
     "edit_armor_min",
     "edit_armor_max",
     "edit_block_base",
-    "edit_random_primary_min",
-    "edit_random_primary_max",
-    "edit_random_secondary_min",
-    "edit_random_secondary_max",
     "edit_is_unique_equipped",
     "edit_binding_mode",
     "edit_level_requirement",
@@ -2880,5 +2940,3 @@ async function init() {
 }
 
 init();
-
-
