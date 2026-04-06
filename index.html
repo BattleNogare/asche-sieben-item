@@ -15,10 +15,13 @@
       --text: #ddd6c8;
       --muted: #9b9182;
       --line: #3b3127;
+      --line-2: #5a4635;
       --accent: #9f7a44;
+      --accent-2: #d2a55f;
       --danger: #b14a3b;
       --ok: #6f9a58;
       --warn: #c8a35a;
+      --info: #6d8bb9;
 
       --rarity-normal: #d5d0c7;
       --rarity-magic: #6da9ff;
@@ -46,7 +49,7 @@
     }
 
     .wrap {
-      max-width: 1800px;
+      max-width: 1880px;
       margin: 0 auto;
       padding: 20px;
     }
@@ -63,6 +66,10 @@
     h1, h2, h3, h4 {
       margin-top: 0;
       color: #e8dcc7;
+    }
+
+    h3 {
+      margin-bottom: 10px;
     }
 
     .muted {
@@ -85,15 +92,20 @@
       display: flex;
       flex-direction: column;
       gap: 6px;
+      min-width: 0;
     }
 
     .col-12 { grid-column: span 12; }
+    .col-10 { grid-column: span 10; }
     .col-9  { grid-column: span 9; }
     .col-8  { grid-column: span 8; }
+    .col-7  { grid-column: span 7; }
     .col-6  { grid-column: span 6; }
+    .col-5  { grid-column: span 5; }
     .col-4  { grid-column: span 4; }
     .col-3  { grid-column: span 3; }
     .col-2  { grid-column: span 2; }
+    .col-1  { grid-column: span 1; }
 
     label {
       font-size: 13px;
@@ -116,6 +128,11 @@
     textarea {
       min-height: 90px;
       resize: vertical;
+    }
+
+    input[readonly] {
+      opacity: 0.85;
+      cursor: default;
     }
 
     input:focus, select:focus, textarea:focus {
@@ -192,7 +209,7 @@
 
     .editor-layout {
       display: grid;
-      grid-template-columns: minmax(980px, 1fr) 420px;
+      grid-template-columns: minmax(1040px, 1fr) 440px;
       gap: 16px;
       align-items: start;
     }
@@ -302,6 +319,51 @@
       margin-top: 10px;
     }
 
+    .subtle-grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .small-note {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .info-box,
+    .warn-box,
+    .error-box,
+    .ok-box {
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--line-2);
+      margin-bottom: 12px;
+      white-space: pre-wrap;
+    }
+
+    .info-box {
+      background: rgba(30, 42, 58, 0.45);
+      border-color: rgba(109, 139, 185, 0.55);
+    }
+
+    .warn-box {
+      background: rgba(60, 44, 18, 0.55);
+      border-color: rgba(200, 163, 90, 0.55);
+    }
+
+    .error-box {
+      background: rgba(65, 26, 24, 0.55);
+      border-color: rgba(177, 74, 59, 0.55);
+    }
+
+    .ok-box {
+      background: rgba(28, 50, 24, 0.55);
+      border-color: rgba(111, 154, 88, 0.55);
+    }
+
+    .validation-box {
+      min-height: 56px;
+    }
+
     .item-list {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -349,12 +411,49 @@
       align-self: start;
     }
 
-    .small-note {
-      font-size: 12px;
-      color: var(--muted);
+    .checkbox-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
     }
 
-    @media (max-width: 1400px) {
+    .checkbox-card {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border: 1px solid #4a3b2c;
+      border-radius: 8px;
+      background: linear-gradient(180deg, #1c171c, #151116);
+      min-height: 44px;
+    }
+
+    .checkbox-card input[type="checkbox"] {
+      width: auto;
+      margin: 0;
+      transform: translateY(1px);
+    }
+
+    .checkbox-card label {
+      font-size: 13px;
+      color: #d2c6b2;
+      cursor: pointer;
+      margin: 0;
+    }
+
+    .form-divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(165,123,55,0.35), transparent);
+      margin: 16px 0;
+    }
+
+    .inline-help {
+      color: #a99d8d;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    @media (max-width: 1450px) {
       .editor-layout {
         grid-template-columns: 1fr;
       }
@@ -372,10 +471,14 @@
       .sticky {
         position: static;
       }
+
+      .checkbox-grid {
+        grid-template-columns: 1fr;
+      }
     }
 
     @media (max-width: 800px) {
-      .col-9, .col-8, .col-6, .col-4, .col-3, .col-2 {
+      .col-10, .col-9, .col-8, .col-7, .col-6, .col-5, .col-4, .col-3, .col-2, .col-1 {
         grid-column: span 12;
       }
     }
@@ -384,7 +487,10 @@
 <body>
   <div class="wrap">
     <h1>Item Admin</h1>
-    <p class="muted">Editor für Items, Affixe, Meta-Daten und Live-Tooltip-Vorschau.</p>
+    <p class="muted">
+      Editor für Item-Templates, feste Properties, Choice-Groups, Random-Fill-Module,
+      Metadaten und Live-Tooltip-Vorschau.
+    </p>
 
     <div id="statusBox" class="status info hidden"></div>
 
@@ -419,50 +525,131 @@
         <button class="tab-btn" data-tab="tab-edit" type="button">Item anzeigen / bearbeiten</button>
       </div>
 
+      <!-- CREATE TAB -->
       <div id="tab-create" class="tab-panel">
         <div class="editor-layout">
           <div class="card">
             <h2>Neues Item anlegen</h2>
 
-            <form id="createForm">
-              <div class="row">
-                <div class="field col-3">
-                  <label for="create_item_family">Kategorie</label>
-                  <select id="create_item_family"></select>
-                </div>
-                <div class="field col-3">
-                  <label for="create_item_subfamily">Unterkategorie</label>
-                  <select id="create_item_subfamily"></select>
-                </div>
-                <div class="field col-3">
-                  <label for="create_item_type">Genaues Item</label>
-                  <select id="create_item_type"></select>
-                </div>
-                <div class="field col-3">
-                  <label for="create_rarity">Rarity</label>
-                  <select id="create_rarity">
-                    <option value="normal">normal</option>
-                    <option value="magic">magic</option>
-                    <option value="rare">rare</option>
-                    <option value="legendary">legendary</option>
-                    <option value="unique">unique</option>
-                    <option value="unreal">unreal</option>
-                  </select>
-                </div>
-              </div>
+            <div class="info-box">
+              Diese Oberfläche bearbeitet nur HTML/JS-seitig Templates.
+              Alle eigentlichen Daten bleiben in der Datenbank.
+            </div>
 
-              <div class="row">
-                <div class="field col-8">
-                  <label for="create_display_name">Anzeigename</label>
-                  <input id="create_display_name" type="text" />
+            <div id="createValidationBox" class="warn-box validation-box hidden"></div>
+
+            <form id="createForm">
+              <div class="module-box">
+                <h3>Grundstruktur</h3>
+
+                <div class="row">
+                  <div class="field col-3">
+                    <label for="create_item_family">Kategorie</label>
+                    <select id="create_item_family"></select>
+                  </div>
+                  <div class="field col-3">
+                    <label for="create_item_subfamily">Unterkategorie</label>
+                    <select id="create_item_subfamily"></select>
+                  </div>
+                  <div class="field col-3">
+                    <label for="create_item_type">Genaues Item</label>
+                    <select id="create_item_type"></select>
+                  </div>
+                  <div class="field col-3">
+                    <label for="create_rarity">Rarity</label>
+                    <select id="create_rarity">
+                      <option value="normal">normal</option>
+                      <option value="magic">magic</option>
+                      <option value="rare">rare</option>
+                      <option value="legendary">legendary</option>
+                      <option value="unique">unique</option>
+                      <option value="unreal">unreal</option>
+                    </select>
+                  </div>
                 </div>
-                <div class="field col-2">
-                  <label for="create_item_code_preview">item_code</label>
-                  <input id="create_item_code_preview" type="text" readonly />
+
+                <div class="row">
+                  <div class="field col-7">
+                    <label for="create_display_name">Anzeigename</label>
+                    <input id="create_display_name" type="text" />
+                  </div>
+                  <div class="field col-2">
+                    <label for="create_item_code_preview">item_code</label>
+                    <input id="create_item_code_preview" type="text" readonly />
+                  </div>
+                  <div class="field col-1">
+                    <label for="create_equip_slot">equip_slot</label>
+                    <input id="create_equip_slot" type="text" readonly />
+                  </div>
+                  <div class="field col-2">
+                    <label for="create_level_requirement">Level Requirement</label>
+                    <input id="create_level_requirement" type="number" min="1" value="1" />
+                  </div>
                 </div>
-                <div class="field col-2">
-                  <label for="create_equip_slot">equip_slot</label>
-                  <input id="create_equip_slot" type="text" readonly />
+
+                <div class="row">
+                  <div class="field col-3">
+                    <label for="create_rarity_label">Rarity Label</label>
+                    <input id="create_rarity_label" type="text" />
+                  </div>
+                  <div class="field col-3">
+                    <label for="create_appearance_code">Appearance Code</label>
+                    <input id="create_appearance_code" type="text" />
+                  </div>
+                  <div class="field col-3">
+                    <label for="create_inventory_width">Inventory Width</label>
+                    <input id="create_inventory_width" type="number" min="1" value="1" />
+                  </div>
+                  <div class="field col-3">
+                    <label for="create_inventory_height">Inventory Height</label>
+                    <input id="create_inventory_height" type="number" min="1" value="1" />
+                  </div>
+                </div>
+
+                <div class="checkbox-grid" style="margin-top: 12px;">
+                  <div class="checkbox-card">
+                    <input id="create_is_equippable" type="checkbox" checked />
+                    <label for="create_is_equippable">Ist ausrüstbar</label>
+                  </div>
+                  <div class="checkbox-card">
+                    <input id="create_is_stackable" type="checkbox" />
+                    <label for="create_is_stackable">Ist stapelbar</label>
+                  </div>
+                  <div class="checkbox-card">
+                    <input id="create_can_have_gems" type="checkbox" />
+                    <label for="create_can_have_gems">Kann Sockel / Gems haben</label>
+                  </div>
+                  <div class="checkbox-card">
+                    <input id="create_can_have_durability" type="checkbox" />
+                    <label for="create_can_have_durability">Hat Haltbarkeit</label>
+                  </div>
+                  <div class="checkbox-card">
+                    <input id="create_can_roll_primary_affixes" type="checkbox" checked />
+                    <label for="create_can_roll_primary_affixes">Kann Primary-Affixe rollen</label>
+                  </div>
+                  <div class="checkbox-card">
+                    <input id="create_can_roll_secondary_affixes" type="checkbox" checked />
+                    <label for="create_can_roll_secondary_affixes">Kann Secondary-Affixe rollen</label>
+                  </div>
+                </div>
+
+                <div class="row" style="margin-top: 12px;">
+                  <div class="field col-3">
+                    <label for="create_max_stack">Max Stack</label>
+                    <input id="create_max_stack" type="number" min="1" value="1" />
+                  </div>
+                  <div class="field col-3">
+                    <label for="create_min_sockets">Min Sockets</label>
+                    <input id="create_min_sockets" type="number" min="0" value="0" />
+                  </div>
+                  <div class="field col-3">
+                    <label for="create_max_sockets">Max Sockets</label>
+                    <input id="create_max_sockets" type="number" min="0" value="0" />
+                  </div>
+                  <div class="field col-3">
+                    <label for="create_item_set_code">Item Set Code</label>
+                    <input id="create_item_set_code" type="text" />
+                  </div>
                 </div>
               </div>
 
@@ -485,7 +672,7 @@
               </div>
 
               <div id="createArmorBlock" class="module-box hidden">
-                <h3>Rüstungswerte</h3>
+                <h3>Rüstungs-/Offhand-Werte</h3>
                 <div class="row">
                   <div class="field col-4">
                     <label for="create_armor_min">Grundrüstung Min</label>
@@ -521,6 +708,9 @@
                     <label for="create_random_secondary_max">Random Secondary Max</label>
                     <input id="create_random_secondary_max" type="number" min="0" value="0" />
                   </div>
+                </div>
+                <div class="small-note">
+                  Diese Werte steuern nur die Template-Grenzen für zufällige Rolls und sollten zur Rarity-Logik passen.
                 </div>
               </div>
 
@@ -599,17 +789,16 @@
                       Unique Equipped
                     </label>
                   </div>
-                  <div class="field col-3">
-                    <label for="create_level_requirement">Item Level</label>
-                    <input id="create_level_requirement" type="number" min="1" value="1" />
+                  <div class="field col-9">
+                    <label for="create_flavor_text">Flavor Text</label>
+                    <textarea id="create_flavor_text"></textarea>
                   </div>
-                  <div class="field col-3">
-                    <label for="create_rarity_label">Rarity Label</label>
-                    <input id="create_rarity_label" type="text" />
-                  </div>
-                  <div class="field col-3">
-                    <label for="create_appearance_code">Appearance Code</label>
-                    <input id="create_appearance_code" type="text" />
+                </div>
+
+                <div class="row">
+                  <div class="field col-12">
+                    <label for="create_description">Interne Beschreibung / Notiz</label>
+                    <textarea id="create_description"></textarea>
                   </div>
                 </div>
               </div>
@@ -632,6 +821,7 @@
         </div>
       </div>
 
+      <!-- EDIT TAB -->
       <div id="tab-edit" class="tab-panel hidden">
         <div class="split">
           <div class="card sticky">
@@ -677,47 +867,122 @@
                 <h2>Item bearbeiten</h2>
                 <p id="editHint" class="muted">Wähle links ein Item aus.</p>
 
+                <div id="editValidationBox" class="warn-box validation-box hidden"></div>
+
                 <form id="editForm" class="hidden">
                   <input id="edit_item_id" type="hidden" />
 
-                  <div class="row">
-                    <div class="field col-3">
-                      <label for="edit_item_family">Kategorie</label>
-                      <select id="edit_item_family"></select>
-                    </div>
-                    <div class="field col-3">
-                      <label for="edit_item_subfamily">Unterkategorie</label>
-                      <select id="edit_item_subfamily"></select>
-                    </div>
-                    <div class="field col-3">
-                      <label for="edit_item_type">Genaues Item</label>
-                      <select id="edit_item_type"></select>
-                    </div>
-                    <div class="field col-3">
-                      <label for="edit_rarity">Rarity</label>
-                      <select id="edit_rarity">
-                        <option value="normal">normal</option>
-                        <option value="magic">magic</option>
-                        <option value="rare">rare</option>
-                        <option value="legendary">legendary</option>
-                        <option value="unique">unique</option>
-                        <option value="unreal">unreal</option>
-                      </select>
-                    </div>
-                  </div>
+                  <div class="module-box">
+                    <h3>Grundstruktur</h3>
 
-                  <div class="row">
-                    <div class="field col-8">
-                      <label for="edit_display_name">Anzeigename</label>
-                      <input id="edit_display_name" type="text" />
+                    <div class="row">
+                      <div class="field col-3">
+                        <label for="edit_item_family">Kategorie</label>
+                        <select id="edit_item_family"></select>
+                      </div>
+                      <div class="field col-3">
+                        <label for="edit_item_subfamily">Unterkategorie</label>
+                        <select id="edit_item_subfamily"></select>
+                      </div>
+                      <div class="field col-3">
+                        <label for="edit_item_type">Genaues Item</label>
+                        <select id="edit_item_type"></select>
+                      </div>
+                      <div class="field col-3">
+                        <label for="edit_rarity">Rarity</label>
+                        <select id="edit_rarity">
+                          <option value="normal">normal</option>
+                          <option value="magic">magic</option>
+                          <option value="rare">rare</option>
+                          <option value="legendary">legendary</option>
+                          <option value="unique">unique</option>
+                          <option value="unreal">unreal</option>
+                        </select>
+                      </div>
                     </div>
-                    <div class="field col-2">
-                      <label for="edit_item_code">item_code</label>
-                      <input id="edit_item_code" type="text" />
+
+                    <div class="row">
+                      <div class="field col-7">
+                        <label for="edit_display_name">Anzeigename</label>
+                        <input id="edit_display_name" type="text" />
+                      </div>
+                      <div class="field col-2">
+                        <label for="edit_item_code">item_code</label>
+                        <input id="edit_item_code" type="text" />
+                      </div>
+                      <div class="field col-1">
+                        <label for="edit_equip_slot">equip_slot</label>
+                        <input id="edit_equip_slot" type="text" readonly />
+                      </div>
+                      <div class="field col-2">
+                        <label for="edit_level_requirement">Level Requirement</label>
+                        <input id="edit_level_requirement" type="number" min="1" />
+                      </div>
                     </div>
-                    <div class="field col-2">
-                      <label for="edit_equip_slot">equip_slot</label>
-                      <input id="edit_equip_slot" type="text" readonly />
+
+                    <div class="row">
+                      <div class="field col-3">
+                        <label for="edit_rarity_label">Rarity Label</label>
+                        <input id="edit_rarity_label" type="text" />
+                      </div>
+                      <div class="field col-3">
+                        <label for="edit_appearance_code">Appearance Code</label>
+                        <input id="edit_appearance_code" type="text" />
+                      </div>
+                      <div class="field col-3">
+                        <label for="edit_inventory_width">Inventory Width</label>
+                        <input id="edit_inventory_width" type="number" min="1" />
+                      </div>
+                      <div class="field col-3">
+                        <label for="edit_inventory_height">Inventory Height</label>
+                        <input id="edit_inventory_height" type="number" min="1" />
+                      </div>
+                    </div>
+
+                    <div class="checkbox-grid" style="margin-top: 12px;">
+                      <div class="checkbox-card">
+                        <input id="edit_is_equippable" type="checkbox" />
+                        <label for="edit_is_equippable">Ist ausrüstbar</label>
+                      </div>
+                      <div class="checkbox-card">
+                        <input id="edit_is_stackable" type="checkbox" />
+                        <label for="edit_is_stackable">Ist stapelbar</label>
+                      </div>
+                      <div class="checkbox-card">
+                        <input id="edit_can_have_gems" type="checkbox" />
+                        <label for="edit_can_have_gems">Kann Sockel / Gems haben</label>
+                      </div>
+                      <div class="checkbox-card">
+                        <input id="edit_can_have_durability" type="checkbox" />
+                        <label for="edit_can_have_durability">Hat Haltbarkeit</label>
+                      </div>
+                      <div class="checkbox-card">
+                        <input id="edit_can_roll_primary_affixes" type="checkbox" />
+                        <label for="edit_can_roll_primary_affixes">Kann Primary-Affixe rollen</label>
+                      </div>
+                      <div class="checkbox-card">
+                        <input id="edit_can_roll_secondary_affixes" type="checkbox" />
+                        <label for="edit_can_roll_secondary_affixes">Kann Secondary-Affixe rollen</label>
+                      </div>
+                    </div>
+
+                    <div class="row" style="margin-top: 12px;">
+                      <div class="field col-3">
+                        <label for="edit_max_stack">Max Stack</label>
+                        <input id="edit_max_stack" type="number" min="1" />
+                      </div>
+                      <div class="field col-3">
+                        <label for="edit_min_sockets">Min Sockets</label>
+                        <input id="edit_min_sockets" type="number" min="0" />
+                      </div>
+                      <div class="field col-3">
+                        <label for="edit_max_sockets">Max Sockets</label>
+                        <input id="edit_max_sockets" type="number" min="0" />
+                      </div>
+                      <div class="field col-3">
+                        <label for="edit_item_set_code">Item Set Code</label>
+                        <input id="edit_item_set_code" type="text" />
+                      </div>
                     </div>
                   </div>
 
@@ -740,7 +1005,7 @@
                   </div>
 
                   <div id="editArmorBlock" class="module-box hidden">
-                    <h3>Rüstungswerte</h3>
+                    <h3>Rüstungs-/Offhand-Werte</h3>
                     <div class="row">
                       <div class="field col-4">
                         <label for="edit_armor_min">Grundrüstung Min</label>
@@ -854,17 +1119,16 @@
                           Unique Equipped
                         </label>
                       </div>
-                      <div class="field col-3">
-                        <label for="edit_level_requirement">Item Level</label>
-                        <input id="edit_level_requirement" type="number" min="1" />
+                      <div class="field col-9">
+                        <label for="edit_flavor_text">Flavor Text</label>
+                        <textarea id="edit_flavor_text"></textarea>
                       </div>
-                      <div class="field col-3">
-                        <label for="edit_rarity_label">Rarity Label</label>
-                        <input id="edit_rarity_label" type="text" />
-                      </div>
-                      <div class="field col-3">
-                        <label for="edit_appearance_code">Appearance Code</label>
-                        <input id="edit_appearance_code" type="text" />
+                    </div>
+
+                    <div class="row">
+                      <div class="field col-12">
+                        <label for="edit_description">Interne Beschreibung / Notiz</label>
+                        <textarea id="edit_description"></textarea>
                       </div>
                     </div>
                   </div>
@@ -886,9 +1150,9 @@
               </div>
             </div>
           </div>
-
         </div>
       </div>
+      <!-- /EDIT TAB -->
     </div>
   </div>
 
